@@ -95,6 +95,49 @@ describe('EmailCLI', () => {
     });
   });
 
+  describe('selectEmailsToMarkAsRead', () => {
+    it('should display message when no emails are found', async () => {
+      // Act
+      const result = await cli.selectEmailsToMarkAsRead([]);
+
+      // Assert
+      expect(result).toEqual([]);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Nenhum email não lido encontrado'));
+    });
+
+    it('should return selected email ids', async () => {
+      // Setup
+      (prompt as jest.Mock).mockResolvedValue({ emails: ['1', '2'] });
+
+      // Act
+      const result = await cli.selectEmailsToMarkAsRead(mockEmails);
+
+      // Assert
+      expect(prompt).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'multiselect',
+        name: 'emails',
+        message: expect.stringContaining('Selecione emails para marcar como lidos'),
+        choices: expect.arrayContaining([
+          expect.objectContaining({ name: '1' }),
+          expect.objectContaining({ name: '2' })
+        ])
+      }));
+      expect(result).toEqual(['1', '2']);
+    });
+
+    it('should handle errors during prompt', async () => {
+      // Setup
+      (prompt as jest.Mock).mockRejectedValue(new Error('Prompt error'));
+
+      // Act
+      const result = await cli.selectEmailsToMarkAsRead(mockEmails);
+
+      // Assert
+      expect(result).toEqual([]);
+      expect(console.error).toHaveBeenCalledWith('❌ Erro ao selecionar emails:', expect.any(Error));
+    });
+  });
+
   describe('displayEmail', () => {
     it('should display email headers and text content', () => {
       // Setup

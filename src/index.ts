@@ -35,30 +35,15 @@ async function handleEmailList(
         // Exibir o conteúdo do email
         emailCLI.displayEmail(fullEmail);
         
-        // Criar uma única interface para ambas as perguntas
+        // Perguntar se o usuário quer voltar à lista ou sair (sem perguntar sobre marcar como lido)
         const rl = createInterface({
           input: process.stdin,
           output: process.stdout
         });
         
-        // Perguntar se deseja marcar como lido
-        const answerMark = await new Promise<string>((resolve) => {
-          rl.question('\n📧 Deseja marcar este email como lido? (S/N): ', (answer) => {
-            resolve(answer.trim().toLowerCase());
-          });
-        });
-        
-        if (answerMark === 's' || answerMark === 'sim') {
-          await markEmailAsReadUseCase.execute(selectedEmail.id);
-          console.log('✅ Email marcado como lido com sucesso!');
-        } else {
-          console.log('ℹ️ Email mantido como não lido.');
-        }
-        
-        // Perguntar se o usuário quer voltar à lista ou sair
         const answer = await new Promise<string>((resolve) => {
           rl.question('\n📋 Pressione ENTER para voltar à lista ou "Q" para sair: ', (answer) => {
-            rl.close(); // Fechamos a interface apenas uma vez, após as duas perguntas
+            rl.close();
             resolve(answer.trim().toLowerCase());
           });
         });
@@ -73,6 +58,39 @@ async function handleEmailList(
     }
   } catch (error) {
     console.error('\n❌ Erro ao listar emails');
+    
+    if (error instanceof Error) {
+      console.error(`   Mensagem: ${error.message}`);
+    }
+  }
+}
+
+async function handleMarkEmailsAsRead(
+  emailCLI: EmailCLI,
+  listUnreadEmailsUseCase: ListUnreadEmailsUseCase,
+  markEmailAsReadUseCase: MarkEmailAsReadUseCase
+): Promise<void> {
+  try {
+    // List unread emails
+    const emails = await listUnreadEmailsUseCase.execute();
+    
+    // Select emails to mark as read
+    const selectedEmailIds = await emailCLI.selectEmailsToMarkAsRead(emails);
+    
+    if (selectedEmailIds.length > 0) {
+      console.log(`\n📧 Marcando ${selectedEmailIds.length} email(s) como lido(s)...`);
+      
+      // Mark each selected email as read
+      for (const emailId of selectedEmailIds) {
+        await markEmailAsReadUseCase.execute(emailId);
+      }
+      
+      console.log(`✅ ${selectedEmailIds.length} email(s) marcado(s) como lido(s) com sucesso!`);
+    } else {
+      console.log('ℹ️ Nenhum email selecionado para marcar como lido.');
+    }
+  } catch (error) {
+    console.error('\n❌ Erro ao marcar emails como lidos');
     
     if (error instanceof Error) {
       console.error(`   Mensagem: ${error.message}`);
@@ -148,6 +166,14 @@ async function main() {
             emailCLI,
             listUnreadEmailsUseCase,
             getEmailContentUseCase,
+            markEmailAsReadUseCase
+          );
+          break;
+          
+        case 'mark_read':
+          await handleMarkEmailsAsRead(
+            emailCLI,
+            listUnreadEmailsUseCase,
             markEmailAsReadUseCase
           );
           break;

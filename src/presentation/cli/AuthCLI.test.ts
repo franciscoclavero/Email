@@ -179,6 +179,7 @@ describe('AuthCLI', () => {
         message: 'Escolha uma opção:',
         choices: expect.arrayContaining([
           expect.objectContaining({ name: 'emails' }),
+          expect.objectContaining({ name: 'mark_read' }),
           expect.objectContaining({ name: 'logout' }),
           expect.objectContaining({ name: 'exit' })
         ])

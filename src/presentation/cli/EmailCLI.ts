@@ -30,6 +30,36 @@ export class EmailCLI {
       return null;
     }
   }
+  
+  async selectEmailsToMarkAsRead(emails: Email[]): Promise<string[]> {
+    if (emails.length === 0) {
+      console.log('📭 Nenhum email não lido encontrado na caixa de entrada.');
+      return [];
+    }
+
+    const choices = emails.map((email) => ({
+      name: email.id,
+      message: `📧 ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
+      value: email.id
+    }));
+
+    try {
+      console.log('\n🔍 Lista de emails não lidos (mais recentes primeiro):');
+      
+      console.log('💡 Use Espaço para selecionar emails e Enter para confirmar');
+      const result = await prompt<{ emails: string[] }>({
+        type: 'multiselect',
+        name: 'emails',
+        message: 'Selecione emails para marcar como lidos:',
+        choices
+      });
+
+      return result.emails;
+    } catch (error) {
+      console.error('❌ Erro ao selecionar emails:', error);
+      return [];
+    }
+  }
 
   displayEmail(email: Email): void {
     console.clear();

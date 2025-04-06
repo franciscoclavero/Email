@@ -96,11 +96,9 @@ export class AuthCLI {
         name: 'action',
         message: 'Escolha uma opção:',
         choices: [
-          { name: 'emails', message: '📨 Listar emails não lidos', value: 'emails' },
-          { name: 'filter_emails', message: '🔍 Buscar emails com filtros', value: 'filter_emails' },
-          { name: 'mark_read', message: '📧 Marcar emails como lidos', value: 'mark_read' },
-          { name: 'logout', message: '🚪 Deslogar', value: 'logout' },
-          { name: 'exit', message: '❌ Sair do aplicativo', value: 'exit' }
+          { name: 'emails', message: '📨 Lista de E-mails', value: 'emails' },
+          { name: 'logout', message: '🚪 Logout', value: 'logout' },
+          { name: 'exit', message: '❌ Fechar', value: 'exit' }
         ]
       });
 

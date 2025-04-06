@@ -1,21 +1,21 @@
 import { prompt } from 'enquirer';
-import { Email } from '@/domain/interfaces/IEmailProvider';
+import { Email, EmailFilterOptions } from '@/domain/interfaces/IEmailProvider';
 
 export class EmailCLI {
   async selectEmail(emails: Email[]): Promise<Email | null> {
     if (emails.length === 0) {
-      console.log('📭 Nenhum email não lido encontrado na caixa de entrada.');
+      console.log('📭 Nenhum email encontrado na seleção atual.');
       return null;
     }
 
     const choices = emails.map((email) => ({
       name: email.id,
-      message: `📧 ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
+      message: `${email.seen ? '📧' : '📬'} ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
       value: email.id
     }));
 
     try {
-      console.log('\n🔍 Lista de emails não lidos (mais recentes primeiro):');
+      console.log('\n🔍 Lista de emails (mais recentes primeiro):');
       
       const result = await prompt<{ email: string }>({
         type: 'select',
@@ -33,24 +33,24 @@ export class EmailCLI {
   
   async selectEmailsToMarkAsRead(emails: Email[]): Promise<string[]> {
     if (emails.length === 0) {
-      console.log('📭 Nenhum email não lido encontrado na caixa de entrada.');
+      console.log('📭 Nenhum email encontrado na seleção atual.');
       return [];
     }
 
     const choices = emails.map((email) => ({
       name: email.id,
-      message: `📧 ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
+      message: `${email.seen ? '📧' : '📬'} ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
       value: email.id
     }));
 
     try {
-      console.log('\n🔍 Lista de emails não lidos (mais recentes primeiro):');
+      console.log('\n🔍 Lista de emails (mais recentes primeiro):');
       
       console.log('💡 Use Espaço para selecionar emails e Enter para confirmar');
       const result = await prompt<{ emails: string[] }>({
         type: 'multiselect',
         name: 'emails',
-        message: 'Selecione emails para marcar como lidos:',
+        message: 'Selecione um ou mais emails:',
         choices
       });
 
@@ -58,6 +58,117 @@ export class EmailCLI {
     } catch (error) {
       console.error('❌ Erro ao selecionar emails:', error);
       return [];
+    }
+  }
+
+  async selectEmailListingOption(): Promise<string> {
+    try {
+      const response = await prompt<{ option: string }>({
+        type: 'select',
+        name: 'option',
+        message: 'Opções de listagem de e-mails:',
+        choices: [
+          { name: 'all', message: '📨 Retornar todos', value: 'all' },
+          { name: 'sender', message: '👤 Filtro de remetente', value: 'sender' },
+          { name: 'unread', message: '📬 Filtro de não lidos', value: 'unread' },
+          { name: 'limit', message: '🔢 Quantidade', value: 'limit' },
+          { name: 'back', message: '⬅️ Voltar', value: 'back' }
+        ]
+      });
+
+      return response.option;
+    } catch (error) {
+      console.error('❌ Erro ao exibir opções de listagem:', error);
+      return 'back';
+    }
+  }
+  
+  async selectFilters(): Promise<EmailFilterOptions> {
+    const filterOptions: EmailFilterOptions = {};
+    let filtersApplied = false;
+    
+    while (!filtersApplied) {
+      console.log('\n🔍 Filtros selecionados:');
+      console.log(`- Apenas não lidos: ${filterOptions.unreadOnly ? '✅ Sim' : '❌ Não'}`);
+      console.log(`- Remetente: ${filterOptions.fromAddresses?.length ? '✅ ' + filterOptions.fromAddresses.join(', ') : '❌ Sem filtro'}`);
+      console.log(`- Limite: ${filterOptions.limit || '❌ Sem limite'}`);
+      
+      const option = await this.selectEmailListingOption();
+      
+      switch (option) {
+        case 'all':
+          // Sem filtros, mas aplicar um limite padrão
+          filterOptions.limit = filterOptions.limit || 50;
+          filtersApplied = true;
+          break;
+          
+        case 'sender':
+          const senderResponse = await prompt<{ sender: string }>({
+            type: 'input',
+            name: 'sender',
+            message: 'Digite o endereço de email do remetente:',
+            validate: (value) => value.trim() ? true : 'Por favor, digite um valor'
+          });
+          
+          filterOptions.fromAddresses = [senderResponse.sender];
+          break;
+          
+        case 'unread':
+          filterOptions.unreadOnly = true;
+          break;
+          
+        case 'limit':
+          const limitResponse = await prompt<{ limit: string }>({
+            type: 'input',
+            name: 'limit',
+            message: 'Quantidade de emails a mostrar:',
+            initial: '50',
+            validate: (value) => {
+              const num = parseInt(value, 10);
+              return (!isNaN(num) && num > 0) ? true : 'Por favor, digite um número válido maior que zero';
+            }
+          });
+          
+          filterOptions.limit = parseInt(limitResponse.limit, 10);
+          break;
+          
+        case 'back':
+          // Retornar filtros vazios para cancelar a operação
+          return {};
+      }
+      
+      if (!filtersApplied) {
+        const applyResponse = await prompt<{ apply: boolean }>({
+          type: 'confirm',
+          name: 'apply',
+          message: 'Aplicar filtros e listar emails?',
+          initial: false
+        });
+        
+        filtersApplied = applyResponse.apply;
+      }
+    }
+    
+    return filterOptions;
+  }
+  
+  async selectEmailAction(email: Email): Promise<string> {
+    try {
+      const response = await prompt<{ action: string }>({
+        type: 'select',
+        name: 'action',
+        message: 'O que deseja fazer com este email?',
+        choices: [
+          { name: 'view', message: '👁️ Ver conteúdo', value: 'view' },
+          { name: 'mark', message: '✓ Marcar como lido', value: 'mark' },
+          { name: 'back', message: '⬅️ Voltar', value: 'back' }
+        ]
+      });
+
+      return response.action;
+    } catch (error) {
+      console.error('❌ Erro ao selecionar ação:', error);
+      return 'back';
     }
   }
 

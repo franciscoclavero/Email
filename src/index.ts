@@ -10,51 +10,82 @@ import { EmailCLI } from './presentation/cli/EmailCLI';
 import { AuthCLI } from './presentation/cli/AuthCLI';
 import { IEmailProvider, EmailFilterOptions } from './domain/interfaces/IEmailProvider';
 import { createInterface } from 'readline';
+import { prompt } from 'enquirer';
 
 async function handleEmailList(
   emailCLI: EmailCLI,
+  listEmailsUseCase: ListEmailsUseCase,
   listUnreadEmailsUseCase: ListUnreadEmailsUseCase,
   getEmailContentUseCase: GetEmailContentUseCase,
   markEmailAsReadUseCase: MarkEmailAsReadUseCase
 ): Promise<void> {
   try {
-    let continueRunning = true;
+    // Mostrar opções de listagem de e-mails
+    const filterOptions = await emailCLI.selectFilters();
+
+    // Se o usuário selecionou "Voltar", retornar ao menu principal
+    if (!filterOptions.limit && !filterOptions.unreadOnly && !filterOptions.fromAddresses) {
+      return;
+    }
+
+    console.log('\n🔍 Buscando emails com os filtros selecionados...');
     
-    while (continueRunning) {
-      // List unread emails
-      const emails = await listUnreadEmailsUseCase.execute();
+    // Buscar emails com os filtros escolhidos
+    const emails = await listEmailsUseCase.execute(filterOptions);
+    
+    if (emails.length === 0) {
+      console.log('📭 Nenhum email encontrado com os filtros especificados.');
+      return;
+    }
+    
+    console.log(`\n📬 Encontrados ${emails.length} emails.`);
+    
+    // Selecionar emails
+    const selectedEmail = await emailCLI.selectEmail(emails);
+    
+    if (selectedEmail) {
+      let continueWithEmail = true;
       
-      // Select an email
-      const selectedEmail = await emailCLI.selectEmail(emails);
-      
-      if (selectedEmail) {
-        console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+      while (continueWithEmail) {
+        // Perguntar o que fazer com o email
+        const action = await emailCLI.selectEmailAction(selectedEmail);
         
-        // Buscar conteúdo completo do email
-        const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
-        
-        // Exibir o conteúdo do email
-        emailCLI.displayEmail(fullEmail);
-        
-        // Perguntar se o usuário quer voltar à lista ou sair (sem perguntar sobre marcar como lido)
-        const rl = createInterface({
-          input: process.stdin,
-          output: process.stdout
-        });
-        
-        const answer = await new Promise<string>((resolve) => {
-          rl.question('\n📋 Pressione ENTER para voltar à lista ou "Q" para sair: ', (answer) => {
-            rl.close();
-            resolve(answer.trim().toLowerCase());
-          });
-        });
-        
-        if (answer === 'q') {
-          continueRunning = false;
+        switch (action) {
+          case 'view':
+            console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+            
+            // Buscar conteúdo completo do email
+            const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
+            
+            // Exibir o conteúdo do email
+            emailCLI.displayEmail(fullEmail);
+            
+            // Aguardar um Enter para continuar
+            await new Promise<void>((resolve) => {
+              const rl = createInterface({
+                input: process.stdin,
+                output: process.stdout
+              });
+              
+              rl.question('\n📋 Pressione ENTER para retornar: ', () => {
+                rl.close();
+                resolve();
+              });
+            });
+            break;
+            
+          case 'mark':
+            // Marcar como lido
+            console.log(`\n📧 Marcando email como lido: "${selectedEmail.subject}"`);
+            await markEmailAsReadUseCase.execute(selectedEmail.id);
+            console.log('✅ Email marcado como lido com sucesso!');
+            continueWithEmail = false;
+            break;
+            
+          case 'back':
+            continueWithEmail = false;
+            break;
         }
-      } else {
-        // Se não selecionou nenhum email, sair do loop
-        continueRunning = false;
       }
     }
   } catch (error) {
@@ -66,103 +97,24 @@ async function handleEmailList(
   }
 }
 
-async function handleMarkEmailsAsRead(
+async function handleEmailsWithMultiSelection(
   emailCLI: EmailCLI,
-  listUnreadEmailsUseCase: ListUnreadEmailsUseCase,
+  listEmailsUseCase: ListEmailsUseCase,
+  getEmailContentUseCase: GetEmailContentUseCase,
   markEmailAsReadUseCase: MarkEmailAsReadUseCase
 ): Promise<void> {
   try {
-    // List unread emails
-    const emails = await listUnreadEmailsUseCase.execute();
-    
-    // Select emails to mark as read
-    const selectedEmailIds = await emailCLI.selectEmailsToMarkAsRead(emails);
-    
-    if (selectedEmailIds.length > 0) {
-      console.log(`\n📧 Marcando ${selectedEmailIds.length} email(s) como lido(s)...`);
-      
-      // Mark each selected email as read
-      for (const emailId of selectedEmailIds) {
-        await markEmailAsReadUseCase.execute(emailId);
-      }
-      
-      console.log(`✅ ${selectedEmailIds.length} email(s) marcado(s) como lido(s) com sucesso!`);
-    } else {
-      console.log('ℹ️ Nenhum email selecionado para marcar como lido.');
-    }
-  } catch (error) {
-    console.error('\n❌ Erro ao marcar emails como lidos');
-    
-    if (error instanceof Error) {
-      console.error(`   Mensagem: ${error.message}`);
-    }
-  }
-}
+    // Mostrar opções de listagem de e-mails
+    const filterOptions = await emailCLI.selectFilters();
 
-async function handleFilteredEmails(
-  emailCLI: EmailCLI,
-  listEmailsUseCase: ListEmailsUseCase,
-  getEmailContentUseCase: GetEmailContentUseCase
-): Promise<void> {
-  try {
-    console.log('\n📋 Filtrar emails por critérios');
-    console.log('='.repeat(50));
-    
-    // Perguntar se quer filtrar por emails não lidos
-    const rlUnread = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
-    const unreadOnly = await new Promise<boolean>((resolve) => {
-      rlUnread.question('Mostrar apenas emails não lidos? (S/N): ', (answer) => {
-        rlUnread.close();
-        resolve(answer.trim().toLowerCase() === 's' || answer.trim().toLowerCase() === 'sim');
-      });
-    });
-    
-    // Perguntar se quer filtrar por remetente
-    const rlSender = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
-    const senderFilter = await new Promise<string>((resolve) => {
-      rlSender.question('Filtrar por remetente (deixe em branco para não filtrar): ', (answer) => {
-        rlSender.close();
-        resolve(answer.trim());
-      });
-    });
-    
-    // Perguntar quantos emails quer ver
-    const rlLimit = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
-    const limitStr = await new Promise<string>((resolve) => {
-      rlLimit.question('Quantidade exata de emails a mostrar (padrão: 10): ', (answer) => {
-        rlLimit.close();
-        resolve(answer.trim());
-      });
-    });
-    
-    const limit = limitStr ? parseInt(limitStr, 10) : 10;
-    
-    // Preparar filtro
-    const filterOptions: EmailFilterOptions = {
-      unreadOnly: unreadOnly,
-      limit: limit > 0 ? limit : 10
-    };
-    
-    // Adicionar filtro de remetente se for fornecido
-    if (senderFilter) {
-      filterOptions.fromAddresses = [senderFilter];
+    // Se o usuário selecionou "Voltar", retornar ao menu principal
+    if (!filterOptions.limit && !filterOptions.unreadOnly && !filterOptions.fromAddresses) {
+      return;
     }
+
+    console.log('\n🔍 Buscando emails com os filtros selecionados...');
     
-    console.log('\n🔍 Buscando emails com os filtros especificados...');
-    
-    // Buscar emails com os filtros
+    // Buscar emails com os filtros escolhidos
     const emails = await listEmailsUseCase.execute(filterOptions);
     
     if (emails.length === 0) {
@@ -170,29 +122,83 @@ async function handleFilteredEmails(
       return;
     }
     
-    // Mostrar os emails
-    console.log(`📬 Encontrados ${emails.length} emails.`);
+    console.log(`\n📬 Encontrados ${emails.length} emails.`);
     
-    // Select an email
-    const selectedEmail = await emailCLI.selectEmail(emails);
+    // Selecionar múltiplos emails
+    const selectedEmailIds = await emailCLI.selectEmailsToMarkAsRead(emails);
     
-    if (selectedEmail) {
-      console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+    if (selectedEmailIds.length > 0) {
+      // Perguntar o que fazer com os emails selecionados
+      const response = await prompt<{ action: string }>({
+        type: 'select',
+        name: 'action',
+        message: `O que deseja fazer com os ${selectedEmailIds.length} emails selecionados?`,
+        choices: [
+          { name: 'mark', message: '✓ Marcar como lidos', value: 'mark' },
+          { name: 'view', message: '👁️ Ver conteúdo do primeiro email', value: 'view' },
+          { name: 'cancel', message: '❌ Cancelar', value: 'cancel' }
+        ]
+      });
       
-      // Buscar conteúdo completo do email
-      const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
-      
-      // Exibir o conteúdo do email
-      emailCLI.displayEmail(fullEmail);
+      switch (response.action) {
+        case 'mark':
+          console.log(`\n📧 Marcando ${selectedEmailIds.length} email(s) como lido(s)...`);
+          
+          // Mark each selected email as read
+          for (const emailId of selectedEmailIds) {
+            await markEmailAsReadUseCase.execute(emailId);
+          }
+          
+          console.log(`✅ ${selectedEmailIds.length} email(s) marcado(s) como lido(s) com sucesso!`);
+          break;
+          
+        case 'view':
+          if (selectedEmailIds.length > 0) {
+            const firstEmailId = selectedEmailIds[0];
+            const selectedEmail = emails.find(email => email.id === firstEmailId);
+            
+            if (selectedEmail) {
+              console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+              
+              // Buscar conteúdo completo do email
+              const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
+              
+              // Exibir o conteúdo do email
+              emailCLI.displayEmail(fullEmail);
+              
+              // Aguardar confirmação
+              await new Promise<void>((resolve) => {
+                const rl = createInterface({
+                  input: process.stdin,
+                  output: process.stdout
+                });
+                
+                rl.question('\n📋 Pressione ENTER para continuar: ', () => {
+                  rl.close();
+                  resolve();
+                });
+              });
+            }
+          }
+          break;
+          
+        case 'cancel':
+          console.log('ℹ️ Operação cancelada.');
+          break;
+      }
+    } else {
+      console.log('ℹ️ Nenhum email selecionado.');
     }
   } catch (error) {
-    console.error('\n❌ Erro ao filtrar emails');
+    console.error('\n❌ Erro ao processar emails selecionados');
     
     if (error instanceof Error) {
       console.error(`   Mensagem: ${error.message}`);
     }
   }
 }
+
+// Esta função não é mais usada, pois foi substituída pelas novas funções de filtro
 
 async function main() {
   try {
@@ -271,28 +277,34 @@ async function main() {
       
       switch (selectedOption) {
         case 'emails':
-          await handleEmailList(
-            emailCLI,
-            listUnreadEmailsUseCase,
-            getEmailContentUseCase,
-            markEmailAsReadUseCase
-          );
-          break;
-        
-        case 'filter_emails':
-          await handleFilteredEmails(
-            emailCLI,
-            listEmailsUseCase,
-            getEmailContentUseCase
-          );
-          break;
+          // Mostrar opções de como listar os emails
+          const listingResponse = await prompt<{ option: string }>({
+            type: 'select',
+            name: 'option',
+            message: 'Como deseja visualizar os emails?',
+            choices: [
+              { name: 'individual', message: '👤 Seleção individual', value: 'individual' },
+              { name: 'multiple', message: '👥 Seleção múltipla', value: 'multiple' },
+              { name: 'back', message: '⬅️ Voltar', value: 'back' }
+            ]
+          });
           
-        case 'mark_read':
-          await handleMarkEmailsAsRead(
-            emailCLI,
-            listUnreadEmailsUseCase,
-            markEmailAsReadUseCase
-          );
+          if (listingResponse.option === 'individual') {
+            await handleEmailList(
+              emailCLI,
+              listEmailsUseCase,
+              listUnreadEmailsUseCase,
+              getEmailContentUseCase,
+              markEmailAsReadUseCase
+            );
+          } else if (listingResponse.option === 'multiple') {
+            await handleEmailsWithMultiSelection(
+              emailCLI,
+              listEmailsUseCase,
+              getEmailContentUseCase,
+              markEmailAsReadUseCase
+            );
+          }
           break;
           
         case 'logout':

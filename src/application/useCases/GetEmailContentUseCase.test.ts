@@ -59,6 +59,34 @@ class MockEmailProvider implements IEmailProvider {
     }
     return Promise.resolve();
   }
+
+  async listEmails(filterOptions?: any): Promise<Email[]> {
+    let emails = [...this.mockEmails];
+    
+    // Apply filters if provided
+    if (filterOptions) {
+      // Filter by unread only
+      if (filterOptions.unreadOnly) {
+        // Assuming all emails in mockEmails are unread, no filtering needed
+      }
+      
+      // Filter by fromAddresses
+      if (filterOptions.fromAddresses && filterOptions.fromAddresses.length > 0) {
+        emails = emails.filter(email => 
+          filterOptions.fromAddresses.some((addr: string) => 
+            email.from.toLowerCase().includes(addr.toLowerCase())
+          )
+        );
+      }
+      
+      // Apply limit
+      if (filterOptions.limit && emails.length > filterOptions.limit) {
+        emails = emails.slice(0, filterOptions.limit);
+      }
+    }
+    
+    return Promise.resolve(emails);
+  }
 }
 
 describe('GetEmailContentUseCase', () => {

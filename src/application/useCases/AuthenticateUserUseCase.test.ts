@@ -28,7 +28,8 @@ describe('AuthenticateUserUseCase', () => {
       listUnreadEmails: jest.fn(),
       getEmailContent: jest.fn(),
       markAsRead: jest.fn(),
-      disconnect: jest.fn()
+      disconnect: jest.fn(),
+      listEmails: jest.fn()
     } as jest.Mocked<IEmailProvider>;
 
     // Create use case with mock provider

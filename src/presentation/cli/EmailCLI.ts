@@ -10,15 +10,17 @@ export class EmailCLI {
 
     const choices = emails.map((email) => ({
       name: email.id,
-      message: `${email.date.toLocaleDateString()} - ${email.from}: ${email.subject}`,
+      message: `📧 ${email.subject.padEnd(40).substring(0, 40)} | De: ${email.from.padEnd(30).substring(0, 30)} | ${email.date.toLocaleDateString()}`,
       value: email.id
     }));
 
     try {
+      console.log('\n🔍 Lista de emails não lidos (mais recentes primeiro):');
+      
       const result = await prompt<{ email: string }>({
         type: 'select',
         name: 'email',
-        message: 'Selecione um email para visualizar:',
+        message: 'Selecione um email usando as setas do teclado:',
         choices
       });
 

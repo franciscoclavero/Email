@@ -70,6 +70,17 @@ describe('EmailCLI', () => {
       }));
       expect(result).toEqual(mockEmails[0]);
     });
+    
+    it('should return null if no matching email is found', async () => {
+      // Setup
+      (prompt as jest.Mock).mockResolvedValue({ email: '3' }); // ID that doesn't exist
+
+      // Act
+      const result = await cli.selectEmail(mockEmails);
+
+      // Assert
+      expect(result).toBeNull();
+    });
 
     it('should handle errors during prompt', async () => {
       // Setup
@@ -150,6 +161,48 @@ describe('EmailCLI', () => {
 
       // Assert
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Nenhum conteúdo disponível'));
+    });
+    
+    it('should handle email with null body', () => {
+      // Setup
+      const email: Email = {
+        id: '1',
+        subject: 'Test Subject',
+        from: 'sender@example.com',
+        date: new Date('2023-01-01T10:00:00Z')
+        // No body property
+      };
+
+      // Act
+      cli.displayEmail(email);
+
+      // Assert
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Nenhum conteúdo disponível'));
+    });
+    
+    it('should handle different types of HTML content', () => {
+      // Setup
+      const email: Email = {
+        id: '1',
+        subject: 'Test Subject',
+        from: 'sender@example.com',
+        date: new Date('2023-01-01T10:00:00Z'),
+        body: {
+          html: '<div>Complex <strong>HTML</strong></div><br/><p>Multiple paragraphs</p><p>Second paragraph</p>'
+        }
+      };
+
+      // Act
+      cli.displayEmail(email);
+
+      // Assert
+      const calls = mockConsoleLog.mock.calls.flat();
+      const textContent = calls.find((call: string) => 
+        typeof call === 'string' && call.includes('Complex HTML')
+      );
+      expect(textContent).toBeDefined();
+      expect(textContent).toContain('Multiple paragraphs');
+      expect(textContent).toContain('Second paragraph');
     });
   });
 });

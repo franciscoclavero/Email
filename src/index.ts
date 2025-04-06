@@ -3,7 +3,6 @@ import './shared/container';
 import { container } from 'tsyringe';
 import { validateEmailConfig } from './shared/config/emailConfig';
 import { ListUnreadEmailsUseCase } from './application/useCases/ListUnreadEmailsUseCase';
-import { GetEmailContentUseCase } from './application/useCases/GetEmailContentUseCase';
 import { EmailCLI } from './presentation/cli/EmailCLI';
 import { IEmailProvider } from './domain/interfaces/IEmailProvider';
 
@@ -15,7 +14,6 @@ async function main() {
     // Get dependencies
     const emailProvider = container.resolve<IEmailProvider>('EmailProvider');
     const listUnreadEmailsUseCase = container.resolve(ListUnreadEmailsUseCase);
-    const getEmailContentUseCase = container.resolve(GetEmailContentUseCase);
     const emailCLI = new EmailCLI();
 
     // Connect to email server
@@ -24,15 +22,11 @@ async function main() {
     // List unread emails
     const emails = await listUnreadEmailsUseCase.execute();
 
-    // Select an email
+    // Select an email (apenas seleção, sem exibir conteúdo)
     const selectedEmail = await emailCLI.selectEmail(emails);
     
     if (selectedEmail) {
-      // Get full email content
-      const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
-      
-      // Display the email
-      emailCLI.displayEmail(fullEmail);
+      console.log(`\n📧 Email selecionado: "${selectedEmail.subject}" de ${selectedEmail.from}`);
     }
 
     // Disconnect

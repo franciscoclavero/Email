@@ -13,7 +13,7 @@ jest.mock('imapflow', () => {
       getMailboxLock: jest.fn().mockImplementation(() => ({
         release: jest.fn()
       })),
-      search: jest.fn().mockResolvedValue(['1', '2']),
+      search: jest.fn().mockResolvedValue(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']),
       fetchOne: jest.fn().mockImplementation((id, fields) => {
         // Different responses based on id and fields
         if (fields.bodyPart === 'TEXT') {
@@ -103,6 +103,27 @@ describe('ImapEmailProvider', () => {
       // Assert
       expect(console.error).toHaveBeenCalledWith('❌ Falha ao conectar com o servidor de email!');
     });
+    
+    it('should handle network connection errors', async () => {
+      // Setup
+      const networkError = new Error('network error occurred');
+      const mockImapFlow = {
+        connect: jest.fn().mockRejectedValue(networkError)
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+      
+      // Act
+      try {
+        await provider.connect();
+      } catch (error) {
+        // Expected to throw
+      }
+      
+      // Assert
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Isso parece um problema de conexão'));
+    });
   });
 
   describe('disconnect', () => {
@@ -135,7 +156,7 @@ describe('ImapEmailProvider', () => {
   });
 
   describe('listUnreadEmails', () => {
-    it('should list unread emails successfully', async () => {
+    it('should list up to 10 most recent unread emails', async () => {
       // Act
       const emails = await provider.listUnreadEmails();
 
@@ -143,9 +164,90 @@ describe('ImapEmailProvider', () => {
       const mockClient = (provider as any).client;
       expect(mockClient.search).toHaveBeenCalled();
       expect(mockClient.fetchOne).toHaveBeenCalled();
-      expect(emails).toHaveLength(2);
-      expect(emails[0].subject).toBe('Test Subject 1');
-      expect(emails[1].subject).toBe('Test Subject 2');
+      expect(emails.length).toBeLessThanOrEqual(10); // Deve retornar no máximo 10 emails
+      // Verifica se os emails estão ordenados por data
+      if (emails.length > 1) {
+        for (let i = 0; i < emails.length - 1; i++) {
+          expect(emails[i].date.getTime()).toBeGreaterThanOrEqual(emails[i + 1].date.getTime());
+        }
+      }
+    });
+    
+    it('should handle fetchOne returning null', async () => {
+      // Setup
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        search: jest.fn().mockResolvedValue(['1', '2']),
+        fetchOne: jest.fn().mockResolvedValue(null) // Retorna null
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+
+      // Act
+      const emails = await provider.listUnreadEmails();
+
+      // Assert
+      expect(emails).toEqual([]);
+    });
+    
+    it('should handle empty message list', async () => {
+      // Setup
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        search: jest.fn().mockResolvedValue([]),
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+      const logSpy = jest.spyOn(console, 'log');
+
+      // Act
+      const emails = await provider.listUnreadEmails();
+
+      // Assert
+      expect(emails).toEqual([]);
+      expect(logSpy).toHaveBeenCalledWith('📭 Nenhum email não lido encontrado na caixa de entrada.');
+    });
+    
+    it('should inform when showing limited number of emails', async () => {
+      // Setup
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        search: jest.fn().mockResolvedValue(Array(20).fill(0).map((_, i) => i + 1)),
+        fetchOne: jest.fn().mockImplementation((id) => {
+          return Promise.resolve({
+            uid: id,
+            envelope: {
+              messageId: `<msg-${id}@example.com>`,
+              subject: `Test Subject ${id}`,
+              from: [{ address: 'sender@example.com', name: 'Sender' }],
+            },
+            internalDate: new Date(),
+            flags: ['unseen']
+          });
+        })
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+      const logSpy = jest.spyOn(console, 'log');
+
+      // Act
+      const emails = await provider.listUnreadEmails();
+
+      // Assert
+      expect(emails.length).toBe(10); // Limitado a 10 emails
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Mostrando os 10 mais recentes'));
     });
 
     it('should connect if not authenticated', async () => {
@@ -230,6 +332,68 @@ describe('ImapEmailProvider', () => {
 
       // Assert
       expect(connectSpy).toHaveBeenCalled();
+    });
+    
+    it('should handle fetchOne returning null for envelope', async () => {
+      // Setup
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        fetchOne: jest.fn().mockResolvedValue({
+          uid: '1',
+          envelope: null // Null envelope
+        })
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+
+      // Act
+      const email = await provider.getEmailContent('1');
+
+      // Assert
+      expect(email.id).toBe('1');
+      expect(email.subject).toBe('');
+      expect(email.from).toBe('');
+      expect(email.body).toBeDefined();
+    });
+    
+    it('should handle missing bodyPart', async () => {
+      // Setup - We'll simulate no body parts returned
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        fetchOne: jest.fn().mockImplementation((id, fields) => {
+          if (fields.envelope) {
+            return Promise.resolve({
+              uid: id,
+              envelope: {
+                messageId: `<msg-${id}@example.com>`,
+                subject: `Test Subject ${id}`,
+                from: [{ address: 'sender@example.com', name: 'Sender' }],
+              },
+              internalDate: new Date()
+            });
+          } else {
+            // Return no bodyPart for text/html requests
+            return Promise.resolve({ uid: id });
+          }
+        })
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+
+      // Act
+      const email = await provider.getEmailContent('1');
+
+      // Assert
+      expect(email.body?.text).toBe('');
+      expect(email.body?.html).toBe('');
     });
 
     it('should handle errors during fetching content', async () => {

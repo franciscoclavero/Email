@@ -56,6 +56,7 @@ export class ImapEmailProvider implements IEmailProvider {
 
   async listUnreadEmails(): Promise<Email[]> {
     const emails: Email[] = [];
+    const MAX_EMAILS = 10; // Número máximo de emails a serem buscados
 
     try {
       // Make sure we're connected
@@ -71,31 +72,44 @@ export class ImapEmailProvider implements IEmailProvider {
       try {
         // Search for unseen messages
         const messages = await this.client.search({ seen: false }, { uid: true });
-        console.log(`📬 Encontrados ${messages.length} emails não lidos.`);
         
-        if (messages.length > 0) {
-          console.log('⏳ Carregando detalhes dos emails...');
-        }
-        
-        // Fetch headers for each message without marking as read
-        for (const message of messages) {
-          const messageId = message.toString();
-          const fetch = await this.client.fetchOne(messageId, {
-            uid: true,
-            envelope: true,
-            internalDate: true,
-            flags: true,
-          }, { uid: true });
-
-          if (fetch && fetch.envelope) {
-            emails.push({
-              id: messageId,
-              messageId: fetch.envelope.messageId,
-              subject: fetch.envelope.subject || '(Sem assunto)',
-              from: fetch.envelope.from?.[0]?.address || '(Remetente desconhecido)',
-              date: fetch.internalDate || new Date(),
-            });
+        if (messages.length === 0) {
+          console.log('📭 Nenhum email não lido encontrado na caixa de entrada.');
+        } else {
+          const totalMessages = messages.length;
+          const messagesToProcess = messages.slice(-MAX_EMAILS); // Pega os 10 mais recentes (últimos UIDs)
+          
+          if (totalMessages > MAX_EMAILS) {
+            console.log(`📬 Encontrados ${totalMessages} emails não lidos. Mostrando os ${MAX_EMAILS} mais recentes.`);
+          } else {
+            console.log(`📬 Encontrados ${totalMessages} emails não lidos.`);
           }
+          
+          console.log('⏳ Carregando detalhes dos emails...');
+        
+          // Fetch headers for each message without marking as read
+          for (const message of messagesToProcess) {
+            const messageId = message.toString();
+            const fetch = await this.client.fetchOne(messageId, {
+              uid: true,
+              envelope: true,
+              internalDate: true,
+              flags: true,
+            }, { uid: true });
+
+            if (fetch && fetch.envelope) {
+              emails.push({
+                id: messageId,
+                messageId: fetch.envelope.messageId,
+                subject: fetch.envelope.subject || '(Sem assunto)',
+                from: fetch.envelope.from?.[0]?.address || '(Remetente desconhecido)',
+                date: fetch.internalDate || new Date(),
+              });
+            }
+          }
+          
+          // Ordena por data, do mais recente para o mais antigo
+          emails.sort((a, b) => b.date.getTime() - a.date.getTime());
         }
       } finally {
         // Always release the lock

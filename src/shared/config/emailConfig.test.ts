@@ -84,6 +84,48 @@ describe('emailConfig', () => {
     // Assert
     expect(validateEmailConfig).toThrow('Email configuration is incomplete');
   });
+  
+  it('should throw error when validating with missing host only', () => {
+    // Setup
+    process.env.EMAIL_HOST = '';
+    process.env.EMAIL_USER = 'user@example.com';
+    process.env.EMAIL_PASS = 'password';
+
+    // Re-import the module to reload with new env vars
+    jest.resetModules();
+    const { validateEmailConfig } = require('./emailConfig');
+
+    // Assert
+    expect(validateEmailConfig).toThrow('Email configuration is incomplete');
+  });
+  
+  it('should throw error when validating with missing user only', () => {
+    // Setup
+    process.env.EMAIL_HOST = 'imap.example.com';
+    process.env.EMAIL_USER = '';
+    process.env.EMAIL_PASS = 'password';
+
+    // Re-import the module to reload with new env vars
+    jest.resetModules();
+    const { validateEmailConfig } = require('./emailConfig');
+
+    // Assert
+    expect(validateEmailConfig).toThrow('Email configuration is incomplete');
+  });
+  
+  it('should throw error when validating with missing password only', () => {
+    // Setup
+    process.env.EMAIL_HOST = 'imap.example.com';
+    process.env.EMAIL_USER = 'user@example.com';
+    process.env.EMAIL_PASS = '';
+
+    // Re-import the module to reload with new env vars
+    jest.resetModules();
+    const { validateEmailConfig } = require('./emailConfig');
+
+    // Assert
+    expect(validateEmailConfig).toThrow('Email configuration is incomplete');
+  });
 
   it('should not throw error when validating complete config', () => {
     // Setup

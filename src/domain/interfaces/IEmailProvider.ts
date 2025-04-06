@@ -14,5 +14,6 @@ export interface IEmailProvider {
   connect(): Promise<void>;
   listUnreadEmails(): Promise<Email[]>;
   getEmailContent(id: string): Promise<Email>;
+  markAsRead(id: string): Promise<void>;
   disconnect(): Promise<void>;
 }

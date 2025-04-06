@@ -178,4 +178,29 @@ export class ImapEmailProvider implements IEmailProvider {
       throw error;
     }
   }
+  
+  async markAsRead(id: string): Promise<void> {
+    try {
+      // Make sure we're connected
+      if (!this.client.authenticated) {
+        await this.connect();
+      }
+
+      console.log(`🔖 Marcando email ${id} como lido...`);
+      
+      const lock = await this.client.getMailboxLock('INBOX');
+      
+      try {
+        // Add the \Seen flag to mark as read
+        await this.client.messageFlagsAdd(id, ['\\Seen'], { uid: true });
+        console.log('✅ Email marcado como lido com sucesso.');
+      } finally {
+        // Always release the lock
+        lock.release();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao marcar email como lido:', error);
+      throw error;
+    }
+  }
 }

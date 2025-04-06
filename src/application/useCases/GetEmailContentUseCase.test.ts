@@ -46,6 +46,14 @@ class MockEmailProvider implements IEmailProvider {
     }
     return email;
   }
+  
+  async markAsRead(id: string): Promise<void> {
+    const email = this.mockEmails.find(email => email.id === id);
+    if (!email) {
+      throw new Error('Email not found');
+    }
+    return Promise.resolve();
+  }
 }
 
 describe('GetEmailContentUseCase', () => {

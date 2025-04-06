@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ListUnreadEmailsUseCase } from './ListUnreadEmailsUseCase';
+import { MarkEmailAsReadUseCase } from './MarkEmailAsReadUseCase';
 import { IEmailProvider, Email } from '@/domain/interfaces/IEmailProvider';
 
 // Mock implementation of IEmailProvider
@@ -55,26 +55,31 @@ class MockEmailProvider implements IEmailProvider {
   }
 }
 
-describe('ListUnreadEmailsUseCase', () => {
-  let listUnreadEmailsUseCase: ListUnreadEmailsUseCase;
+describe('MarkEmailAsReadUseCase', () => {
+  let markEmailAsReadUseCase: MarkEmailAsReadUseCase;
   let mockEmailProvider: IEmailProvider;
 
   beforeEach(() => {
     mockEmailProvider = new MockEmailProvider();
-    listUnreadEmailsUseCase = new ListUnreadEmailsUseCase(mockEmailProvider);
+    markEmailAsReadUseCase = new MarkEmailAsReadUseCase(mockEmailProvider);
   });
 
-  it('should return a list of unread emails', async () => {
-    const emails = await listUnreadEmailsUseCase.execute();
+  it('should mark an email as read successfully', async () => {
+    // Setup
+    const markAsReadSpy = jest.spyOn(mockEmailProvider, 'markAsRead');
     
-    expect(emails).toHaveLength(2);
-    expect(emails[0].subject).toBe('Test Email 1');
-    expect(emails[1].subject).toBe('Test Email 2');
+    // Act
+    await markEmailAsReadUseCase.execute('1');
+    
+    // Assert
+    expect(markAsReadSpy).toHaveBeenCalledWith('1');
   });
 
   it('should throw an error when email provider fails', async () => {
-    jest.spyOn(mockEmailProvider, 'listUnreadEmails').mockRejectedValue(new Error('Connection error'));
+    // Setup
+    jest.spyOn(mockEmailProvider, 'markAsRead').mockRejectedValue(new Error('Failed to mark as read'));
     
-    await expect(listUnreadEmailsUseCase.execute()).rejects.toThrow('Falha ao listar emails não lidos');
+    // Act & Assert
+    await expect(markEmailAsReadUseCase.execute('999')).rejects.toThrow('Falha ao marcar email como lido');
   });
 });

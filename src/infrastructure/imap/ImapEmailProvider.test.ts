@@ -15,6 +15,7 @@ jest.mock('imapflow', () => {
         release: jest.fn()
       })),
       search: jest.fn().mockResolvedValue(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']),
+      messageFlagsAdd: jest.fn().mockResolvedValue(true),
       fetchOne: jest.fn().mockImplementation((id, fields) => {
         // Return source for raw email parsing
         if (fields.source) {
@@ -502,6 +503,81 @@ describe('ImapEmailProvider', () => {
       // Act
       try {
         await provider.getEmailContent('1');
+      } catch (error) {
+        // We expect it to throw
+      }
+
+      // Assert
+      expect(releaseMock).toHaveBeenCalled();
+    });
+  });
+  
+  describe('markAsRead', () => {
+    it('should mark an email as read successfully', async () => {
+      // Setup
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      
+      // Act
+      await provider.markAsRead('1');
+
+      // Assert
+      const mockClient = (provider as any).client;
+      expect(mockClient.messageFlagsAdd).toHaveBeenCalledWith('1', ['\\Seen'], { uid: true });
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Email marcado como lido com sucesso.');
+      
+      // Cleanup
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should connect if not authenticated', async () => {
+      // Setup
+      (provider as any).client.authenticated = false;
+      const connectSpy = jest.spyOn(provider, 'connect').mockResolvedValue();
+
+      // Act
+      await provider.markAsRead('1');
+
+      // Assert
+      expect(connectSpy).toHaveBeenCalled();
+    });
+
+    it('should handle errors when marking as read', async () => {
+      // Setup
+      const error = new Error('Failed to mark as read');
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        messageFlagsAdd: jest.fn().mockRejectedValue(error)
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+
+      // Act & Assert
+      await expect(provider.markAsRead('1')).rejects.toThrow('Failed to mark as read');
+      expect(console.error).toHaveBeenCalledWith('❌ Erro ao marcar email como lido:', error);
+    });
+
+    it('should always release the lock even on error', async () => {
+      // Setup
+      const error = new Error('Failed to mark as read');
+      const releaseMock = jest.fn();
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: releaseMock
+        })),
+        messageFlagsAdd: jest.fn().mockRejectedValue(error)
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+
+      // Act
+      try {
+        await provider.markAsRead('1');
       } catch (error) {
         // We expect it to throw
       }

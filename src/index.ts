@@ -4,10 +4,10 @@ import { container } from 'tsyringe';
 import { validateEmailConfig } from './shared/config/emailConfig';
 import { ListUnreadEmailsUseCase } from './application/useCases/ListUnreadEmailsUseCase';
 import { GetEmailContentUseCase } from './application/useCases/GetEmailContentUseCase';
+import { MarkEmailAsReadUseCase } from './application/useCases/MarkEmailAsReadUseCase';
 import { EmailCLI } from './presentation/cli/EmailCLI';
 import { IEmailProvider } from './domain/interfaces/IEmailProvider';
 import { createInterface } from 'readline';
-import fs from 'fs';
 
 async function main() {
   try {
@@ -18,6 +18,7 @@ async function main() {
     const emailProvider = container.resolve<IEmailProvider>('EmailProvider');
     const listUnreadEmailsUseCase = container.resolve(ListUnreadEmailsUseCase);
     const getEmailContentUseCase = container.resolve(GetEmailContentUseCase);
+    const markEmailAsReadUseCase = container.resolve(MarkEmailAsReadUseCase);
     const emailCLI = new EmailCLI();
 
     // Connect to email server
@@ -38,7 +39,10 @@ async function main() {
           
           // Buscar conteúdo completo do email
           const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
-          fs.writeFileSync('email.txt', JSON.stringify(fullEmail));
+          
+          // Marcar email como lido
+          await markEmailAsReadUseCase.execute(selectedEmail.id);
+          console.log('📧 Email marcado como lido');
           
           // Exibir o conteúdo do email
           emailCLI.displayEmail(fullEmail);

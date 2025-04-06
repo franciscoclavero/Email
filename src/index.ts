@@ -141,7 +141,7 @@ async function handleFilteredEmails(
     });
     
     const limitStr = await new Promise<string>((resolve) => {
-      rlLimit.question('Quantidade de emails a mostrar (padrão: 10): ', (answer) => {
+      rlLimit.question('Quantidade exata de emails a mostrar (padrão: 10): ', (answer) => {
         rlLimit.close();
         resolve(answer.trim());
       });

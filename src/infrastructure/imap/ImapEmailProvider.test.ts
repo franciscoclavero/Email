@@ -840,40 +840,31 @@ describe('ImapEmailProvider', () => {
 
       // Assert
       expect(emails.length).toBe(5);
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('Mostrando os 5 mais recentes'));
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('Exibindo 5 emails'));
     });
 
-    it('should filter by fromAddresses correctly', async () => {
-      // Setup
-      const mockEmails = [
-        {
-          uid: '1',
+    it('should filter by fromAddresses correctly and return exact limit', async () => {
+      // Setup - Create 20 emails, 10 from example.com and 10 from gmail.com
+      const mockEmails = Array(20).fill(0).map((_, i) => {
+        const domain = i % 2 === 0 ? 'example.com' : 'gmail.com';
+        return {
+          uid: String(i + 1),
           envelope: {
-            messageId: 'msg1',
-            subject: 'Subject 1',
-            from: [{ address: 'sender1@example.com' }]
+            messageId: `msg${i+1}`,
+            subject: `Subject ${i+1}`,
+            from: [{ address: `sender${i+1}@${domain}` }]
           },
           internalDate: new Date(),
           flags: []
-        },
-        {
-          uid: '2',
-          envelope: {
-            messageId: 'msg2',
-            subject: 'Subject 2',
-            from: [{ address: 'sender2@gmail.com' }]
-          },
-          internalDate: new Date(),
-          flags: []
-        }
-      ];
+        };
+      });
       
       const mockImapFlow = {
         authenticated: true,
         getMailboxLock: jest.fn().mockImplementation(() => ({
           release: jest.fn()
         })),
-        search: jest.fn().mockResolvedValue(['1', '2']),
+        search: jest.fn().mockResolvedValue(mockEmails.map((_, i) => String(i + 1))),
         fetchOne: jest.fn().mockImplementation((id) => {
           return Promise.resolve(mockEmails[parseInt(id) - 1]);
         })
@@ -883,13 +874,19 @@ describe('ImapEmailProvider', () => {
       provider = new ImapEmailProvider();
       await provider.configure('imap.test.com', 993, 'test@test.com', 'password');
 
-      // Act - filter for gmail.com addresses only
-      const options: EmailFilterOptions = { fromAddresses: ['gmail.com'] };
+      // Act - filter for gmail.com addresses only, with limit 5
+      const options: EmailFilterOptions = { 
+        fromAddresses: ['gmail.com'],
+        limit: 5
+      };
       const emails = await provider.listEmails(options);
 
-      // Assert - should only include the second email
-      expect(emails.length).toBe(1);
-      expect(emails[0].from).toContain('gmail.com');
+      // Assert - should return exactly 5 emails, all from gmail.com
+      expect(emails.length).toBe(5);
+      emails.forEach(email => {
+        expect(email.from).toContain('gmail.com');
+      });
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('Exibindo 5 emails'));
     });
 
     it('should handle empty search results', async () => {

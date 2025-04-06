@@ -235,7 +235,6 @@ export class ImapEmailProvider implements IEmailProvider {
   }
 
   async listEmails(filterOptions?: EmailFilterOptions): Promise<Email[]> {
-    const emails: Email[] = [];
     const DEFAULT_LIMIT = 10;
     
     // Set default filter options
@@ -246,6 +245,9 @@ export class ImapEmailProvider implements IEmailProvider {
       ...filterOptions
     };
 
+    // Definir o limite exato de emails que queremos retornar
+    const exactLimit = options.limit || DEFAULT_LIMIT;
+    
     try {
       // Make sure we're connected
       if (!this.client.authenticated) {
@@ -275,19 +277,27 @@ export class ImapEmailProvider implements IEmailProvider {
         } 
         
         const totalMessages = messages.length;
-        // Determine how many messages to process (default or user-specified limit)
-        const messagesToProcess = messages.slice(-Math.min(totalMessages, options.limit || DEFAULT_LIMIT));
+        console.log(`📬 Encontrados ${totalMessages} emails no total.`);
         
-        if (totalMessages > (options.limit || DEFAULT_LIMIT)) {
-          console.log(`📬 Encontrados ${totalMessages} emails. Mostrando os ${options.limit || DEFAULT_LIMIT} mais recentes.`);
-        } else {
-          console.log(`📬 Encontrados ${totalMessages} emails.`);
-        }
+        // Vamos buscar mais mensagens do que o limite para poder filtrar por remetente depois
+        // e ainda assim ter o número exato de mensagens solicitado
+        const fetchMultiplier = options.fromAddresses && options.fromAddresses.length > 0 ? 3 : 1;
+        const messagesToFetch = Math.min(totalMessages, exactLimit * fetchMultiplier);
+        
+        // Pegamos as mensagens mais recentes primeiro (últimos UIDs)
+        const messagesToProcess = messages.slice(-messagesToFetch);
         
         console.log('⏳ Carregando detalhes dos emails...');
         
+        const allEmails: Email[] = [];
+        
         // Fetch headers for each message without marking as read
         for (const message of messagesToProcess) {
+          // Se já temos o número exato de emails após filtro, podemos parar
+          if (allEmails.length >= exactLimit) {
+            break;
+          }
+          
           const messageId = message.toString();
           const fetch = await this.client.fetchOne(messageId, {
             uid: true,
@@ -308,7 +318,7 @@ export class ImapEmailProvider implements IEmailProvider {
               continue;
             }
             
-            emails.push({
+            allEmails.push({
               id: messageId,
               messageId: fetch.envelope.messageId,
               subject: fetch.envelope.subject || '(Sem assunto)',
@@ -320,7 +330,14 @@ export class ImapEmailProvider implements IEmailProvider {
         }
         
         // Ordena por data, do mais recente para o mais antigo
-        emails.sort((a, b) => b.date.getTime() - a.date.getTime());
+        allEmails.sort((a, b) => b.date.getTime() - a.date.getTime());
+        
+        // Limita ao número exato solicitado
+        const finalEmails = allEmails.slice(0, exactLimit);
+        
+        console.log(`📬 Exibindo ${finalEmails.length} emails.`);
+        
+        return finalEmails;
       } finally {
         // Always release the lock
         lock.release();
@@ -329,7 +346,5 @@ export class ImapEmailProvider implements IEmailProvider {
       console.error('❌ Erro ao listar emails:', error);
       throw error;
     }
-
-    return emails;
   }
 }

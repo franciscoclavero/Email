@@ -34,8 +34,8 @@ export class EmailCLI {
   displayEmail(email: Email): void {
     console.clear();
     
-    // Cabeçalho do email
-    console.log('\n' + '📧'.padEnd(80, '='));
+    // Cabeçalho do email - Mais visualmente distinto
+    console.log('\n' + '📧 CONTEÚDO DO EMAIL '.padEnd(80, '='));
     console.log(`De: ${email.from}`);
     console.log(`Assunto: ${email.subject}`);
     console.log(`Data: ${email.date.toLocaleString()}`);

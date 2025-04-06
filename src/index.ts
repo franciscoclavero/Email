@@ -40,22 +40,33 @@ async function main() {
           // Buscar conteúdo completo do email
           const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
           
-          // Marcar email como lido
-          await markEmailAsReadUseCase.execute(selectedEmail.id);
-          console.log('📧 Email marcado como lido');
-          
           // Exibir o conteúdo do email
           emailCLI.displayEmail(fullEmail);
           
-          // Perguntar se o usuário quer voltar à lista ou sair
+          // Criar uma única interface para ambas as perguntas
           const rl = createInterface({
             input: process.stdin,
             output: process.stdout
           });
           
+          // Perguntar se deseja marcar como lido
+          const answerMark = await new Promise<string>((resolve) => {
+            rl.question('\n📧 Deseja marcar este email como lido? (S/N): ', (answer) => {
+              resolve(answer.trim().toLowerCase());
+            });
+          });
+          
+          if (answerMark === 's' || answerMark === 'sim') {
+            await markEmailAsReadUseCase.execute(selectedEmail.id);
+            console.log('✅ Email marcado como lido com sucesso!');
+          } else {
+            console.log('ℹ️ Email mantido como não lido.');
+          }
+          
+          // Perguntar se o usuário quer voltar à lista ou sair
           const answer = await new Promise<string>((resolve) => {
             rl.question('\n📋 Pressione ENTER para voltar à lista ou "Q" para sair: ', (answer) => {
-              rl.close();
+              rl.close(); // Fechamos a interface apenas uma vez, após as duas perguntas
               resolve(answer.trim().toLowerCase());
             });
           });

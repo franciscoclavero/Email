@@ -1,17 +1,38 @@
 import { prompt } from 'enquirer';
+import { emailConfig, validateEmailConfig } from '@/shared/config/emailConfig';
 
 export class AuthCLI {
   async collectCredentials(): Promise<{ host: string; port: number; user: string; password: string } | null> {
     try {
       console.log('\n📧 Autenticação de Email IMAP 📧');
       console.log('='.repeat(50));
+
+      // Verificar se já tem credenciais salvas
+      if (validateEmailConfig()) {
+        // Perguntar se quer usar as credenciais salvas
+        const savedCredentialsResponse = await prompt<{ useSaved: boolean }>({
+          type: 'confirm',
+          name: 'useSaved',
+          message: `Encontramos credenciais salvas para ${emailConfig.user}. Deseja usá-las?`,
+          initial: true
+        });
+
+        if (savedCredentialsResponse.useSaved) {
+          return {
+            host: emailConfig.host,
+            port: emailConfig.port,
+            user: emailConfig.user,
+            password: emailConfig.pass
+          };
+        }
+      }
       
       // Obter o servidor IMAP
       const hostResponse = await prompt<{ host: string }>({
         type: 'input',
         name: 'host',
         message: 'Servidor IMAP (ex: imap.gmail.com):',
-        initial: 'imap.gmail.com'
+        initial: emailConfig.host || 'imap.gmail.com'
       });
 
       // Obter a porta
@@ -19,7 +40,7 @@ export class AuthCLI {
         type: 'input',
         name: 'port',
         message: 'Porta (ex: 993):',
-        initial: '993',
+        initial: emailConfig.port ? String(emailConfig.port) : '993',
         validate: (value) => {
           const num = parseInt(value, 10);
           if (isNaN(num) || num <= 0 || num > 65535) {
@@ -34,6 +55,7 @@ export class AuthCLI {
         type: 'input',
         name: 'user',
         message: 'Email:',
+        initial: emailConfig.user || '',
         validate: (value) => {
           if (!value.includes('@')) {
             return 'Por favor, digite um endereço de email válido';

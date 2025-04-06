@@ -118,42 +118,54 @@ async function main() {
     let running = true;
     
     while (running) {
-      // Se não estiver autenticado, mostrar tela de login
+      // Se não estiver autenticado, tentar login automático ou mostrar tela de login
       if (!isAuthenticated) {
-        const credentials = await authCLI.collectCredentials();
+        // Primeiro, tentar login automático com credenciais salvas
+        console.log('🔄 Verificando credenciais salvas...');
+        isAuthenticated = await authenticateUserUseCase.executeWithSavedCredentials();
         
-        if (!credentials) {
-          console.log('Login cancelado. Saindo...');
-          running = false;
-          continue;
-        }
-        
-        const { host, port, user, password } = credentials;
-        
-        // Tenta autenticar
-        isAuthenticated = await authenticateUserUseCase.execute(host, port, user, password);
-        
+        // Se login automático falhar, pedir credenciais
         if (!isAuthenticated) {
-          authCLI.showLoginError();
+          console.log('🔑 Login manual necessário.');
+          const credentials = await authCLI.collectCredentials();
           
-          // Perguntar se quer tentar novamente
-          const answer = await new Promise<string>((resolve) => {
-            const rl = createInterface({
-              input: process.stdin,
-              output: process.stdout
-            });
-            
-            rl.question('\nDeseja tentar novamente? (S/N): ', (answer) => {
-              rl.close();
-              resolve(answer.trim().toLowerCase());
-            });
-          });
-          
-          if (answer !== 's' && answer !== 'sim') {
+          if (!credentials) {
+            console.log('Login cancelado. Saindo...');
             running = false;
+            continue;
           }
           
-          continue;
+          const { host, port, user, password } = credentials;
+          
+          // Tenta autenticar
+          isAuthenticated = await authenticateUserUseCase.execute(host, port, user, password);
+          
+          if (!isAuthenticated) {
+            authCLI.showLoginError();
+            
+            // Perguntar se quer tentar novamente
+            const answer = await new Promise<string>((resolve) => {
+              const rl = createInterface({
+                input: process.stdin,
+                output: process.stdout
+              });
+              
+              rl.question('\nDeseja tentar novamente? (S/N): ', (answer) => {
+                rl.close();
+                resolve(answer.trim().toLowerCase());
+              });
+            });
+            
+            if (answer !== 's' && answer !== 'sim') {
+              running = false;
+            }
+            
+            continue;
+          } else {
+            console.log('✅ Login realizado com sucesso. Credenciais salvas para uso futuro.');
+          }
+        } else {
+          console.log('✅ Login automático realizado com sucesso!');
         }
       }
       
@@ -181,6 +193,13 @@ async function main() {
         case 'logout':
           // Desconectar
           await emailProvider.disconnect();
+          
+          // Limpar credenciais do .env
+          const { clearEmailConfig } = await import('./shared/config/emailConfig');
+          const cleared = await clearEmailConfig();
+          if (cleared) {
+            console.log('🔒 Credenciais removidas do arquivo .env');
+          }
           
           // Mostrar mensagem de logout
           authCLI.showLogoutSuccess();

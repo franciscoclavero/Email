@@ -1,5 +1,6 @@
 import { AuthCLI } from './AuthCLI';
 import { prompt } from 'enquirer';
+import { emailConfig, validateEmailConfig } from '@/shared/config/emailConfig';
 
 // Mock the enquirer library
 jest.mock('enquirer', () => {
@@ -7,6 +8,17 @@ jest.mock('enquirer', () => {
     prompt: jest.fn()
   };
 });
+
+// Mock do módulo emailConfig
+jest.mock('@/shared/config/emailConfig', () => ({
+  emailConfig: {
+    host: '',
+    port: 993,
+    user: '',
+    pass: ''
+  },
+  validateEmailConfig: jest.fn().mockReturnValue(false)
+}));
 
 describe('AuthCLI', () => {
   let authCLI: AuthCLI;
@@ -26,8 +38,86 @@ describe('AuthCLI', () => {
   });
 
   describe('collectCredentials', () => {
+    it('should use saved credentials when available and user confirms', async () => {
+      // Arrange - Mock that we have saved credentials
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(true);
+      
+      // Set mock saved credentials
+      Object.assign(emailConfig, {
+        host: 'imap.saved.com',
+        port: 993,
+        user: 'saved@test.com',
+        pass: 'savedpass'
+      });
+      
+      // User confirms to use saved credentials
+      (prompt as jest.Mock).mockResolvedValueOnce({ useSaved: true });
+
+      // Act
+      const result = await authCLI.collectCredentials();
+
+      // Assert
+      expect(result).toEqual({
+        host: 'imap.saved.com',
+        port: 993,
+        user: 'saved@test.com',
+        password: 'savedpass'
+      });
+      
+      expect(prompt).toHaveBeenCalledTimes(1);
+      expect(prompt).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'confirm',
+        name: 'useSaved',
+        message: expect.stringContaining('Encontramos credenciais salvas')
+      }));
+    });
+    
+    it('should prompt for credentials when user declines to use saved credentials', async () => {
+      // Arrange - Mock that we have saved credentials
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(true);
+      
+      // Set mock saved credentials
+      Object.assign(emailConfig, {
+        host: 'imap.saved.com',
+        port: 993,
+        user: 'saved@test.com',
+        pass: 'savedpass'
+      });
+      
+      // User declines to use saved credentials
+      (prompt as jest.Mock).mockResolvedValueOnce({ useSaved: false });
+      
+      // Mock the prompt responses for new credentials
+      const mockCredentials = {
+        host: 'imap.test.com',
+        port: '993',
+        user: 'test@test.com',
+        password: 'password123'
+      };
+      
+      (prompt as jest.Mock).mockResolvedValueOnce({ host: mockCredentials.host });
+      (prompt as jest.Mock).mockResolvedValueOnce({ port: mockCredentials.port });
+      (prompt as jest.Mock).mockResolvedValueOnce({ user: mockCredentials.user });
+      (prompt as jest.Mock).mockResolvedValueOnce({ password: mockCredentials.password });
+
+      // Act
+      const result = await authCLI.collectCredentials();
+
+      // Assert
+      expect(result).toEqual({
+        host: mockCredentials.host,
+        port: parseInt(mockCredentials.port, 10),
+        user: mockCredentials.user,
+        password: mockCredentials.password
+      });
+      
+      expect(prompt).toHaveBeenCalledTimes(5); // 1 for confirm + 4 for credentials
+    });
+    
     it('should return credentials when user provides them', async () => {
-      // Arrange
+      // Arrange - No saved credentials
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(false);
+      
       const mockCredentials = {
         host: 'imap.test.com',
         port: '993',

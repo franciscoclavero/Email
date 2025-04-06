@@ -27,6 +27,11 @@ class MockEmailProvider implements IEmailProvider {
     }
   ];
 
+  async configure(host: string, port: number, user: string, password: string): Promise<void> {
+    // Apenas simula a configuração
+    return Promise.resolve();
+  }
+
   async connect(): Promise<void> {
     return Promise.resolve();
   }

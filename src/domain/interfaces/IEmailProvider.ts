@@ -11,6 +11,7 @@ export interface Email {
 }
 
 export interface IEmailProvider {
+  configure(host: string, port: number, user: string, password: string): Promise<void>;
   connect(): Promise<void>;
   listUnreadEmails(): Promise<Email[]>;
   getEmailContent(id: string): Promise<Email>;

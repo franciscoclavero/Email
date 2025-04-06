@@ -1,21 +1,46 @@
 import { ImapFlow } from 'imapflow';
 import { injectable } from 'tsyringe';
 import { Email, IEmailProvider } from '@/domain/interfaces/IEmailProvider';
-import { emailConfig } from '@/shared/config/emailConfig';
 import { simpleParser } from 'mailparser';
+
+interface ImapConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+}
 
 @injectable()
 export class ImapEmailProvider implements IEmailProvider {
   private client: any;
+  private config: ImapConfig = {
+    host: '',
+    port: 993,
+    user: '',
+    password: ''
+  };
 
   constructor() {
+    // Construtor vazio, o cliente será inicializado após a configuração
+  }
+
+  async configure(host: string, port: number, user: string, password: string): Promise<void> {
+    // Atualiza a configuração com os valores fornecidos
+    this.config = {
+      host,
+      port,
+      user,
+      password
+    };
+
+    // Inicializa o cliente IMAP com a nova configuração
     this.client = new ImapFlow({
-      host: emailConfig.host,
-      port: emailConfig.port,
+      host: this.config.host,
+      port: this.config.port,
       secure: true,
       auth: {
-        user: emailConfig.user,
-        pass: emailConfig.pass
+        user: this.config.user,
+        pass: this.config.password
       },
       logger: false
     });
@@ -23,7 +48,12 @@ export class ImapEmailProvider implements IEmailProvider {
 
   async connect(): Promise<void> {
     try {
-      console.log(`🔄 Conectando ao servidor: ${emailConfig.host}:${emailConfig.port} como ${emailConfig.user}...`);
+      // Verifica se o cliente foi configurado
+      if (!this.client) {
+        throw new Error('O cliente IMAP não foi configurado. Chame configure() primeiro.');
+      }
+
+      console.log(`🔄 Conectando ao servidor: ${this.config.host}:${this.config.port} como ${this.config.user}...`);
       await this.client.connect();
       console.log('✅ Conexão com o servidor de email estabelecida com sucesso!');
     } catch (error) {

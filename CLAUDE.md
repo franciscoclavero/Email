@@ -19,4 +19,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Code Organization**: Split code into modular components with clear responsibilities
 
 ## Project Structure
-This is a Node.js email-related project, likely for sending or processing emails.
+This is a Node.js application following SOLID principles with the following structure:
+- `src/application/useCases`: Business logic and use cases
+- `src/domain/interfaces`: Contracts and interfaces
+- `src/infrastructure/imap`: IMAP implementation using imapflow
+- `src/presentation/cli`: Terminal UI using enquirer
+- `src/shared`: Configuration and dependency injection
+
+## Architecture Guidelines
+- Follow SOLID principles and dependency injection pattern
+- Use tsyringe for dependency injection
+- Keep email provider implementation details in infrastructure layer
+- Write tests with Jest using dependency mocks

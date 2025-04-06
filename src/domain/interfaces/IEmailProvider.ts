@@ -8,6 +8,13 @@ export interface Email {
     text?: string;
     html?: string;
   };
+  seen?: boolean;
+}
+
+export interface EmailFilterOptions {
+  unreadOnly?: boolean;
+  fromAddresses?: string[];
+  limit?: number;
 }
 
 export interface IEmailProvider {
@@ -17,4 +24,5 @@ export interface IEmailProvider {
   getEmailContent(id: string): Promise<Email>;
   markAsRead(id: string): Promise<void>;
   disconnect(): Promise<void>;
+  listEmails(filterOptions?: EmailFilterOptions): Promise<Email[]>;
 }

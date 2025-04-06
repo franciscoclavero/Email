@@ -5,9 +5,10 @@ import { ListUnreadEmailsUseCase } from './application/useCases/ListUnreadEmails
 import { GetEmailContentUseCase } from './application/useCases/GetEmailContentUseCase';
 import { MarkEmailAsReadUseCase } from './application/useCases/MarkEmailAsReadUseCase';
 import { AuthenticateUserUseCase } from './application/useCases/AuthenticateUserUseCase';
+import { ListEmailsUseCase } from './application/useCases/ListEmailsUseCase';
 import { EmailCLI } from './presentation/cli/EmailCLI';
 import { AuthCLI } from './presentation/cli/AuthCLI';
-import { IEmailProvider } from './domain/interfaces/IEmailProvider';
+import { IEmailProvider, EmailFilterOptions } from './domain/interfaces/IEmailProvider';
 import { createInterface } from 'readline';
 
 async function handleEmailList(
@@ -98,6 +99,101 @@ async function handleMarkEmailsAsRead(
   }
 }
 
+async function handleFilteredEmails(
+  emailCLI: EmailCLI,
+  listEmailsUseCase: ListEmailsUseCase,
+  getEmailContentUseCase: GetEmailContentUseCase
+): Promise<void> {
+  try {
+    console.log('\n📋 Filtrar emails por critérios');
+    console.log('='.repeat(50));
+    
+    // Perguntar se quer filtrar por emails não lidos
+    const rlUnread = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const unreadOnly = await new Promise<boolean>((resolve) => {
+      rlUnread.question('Mostrar apenas emails não lidos? (S/N): ', (answer) => {
+        rlUnread.close();
+        resolve(answer.trim().toLowerCase() === 's' || answer.trim().toLowerCase() === 'sim');
+      });
+    });
+    
+    // Perguntar se quer filtrar por remetente
+    const rlSender = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const senderFilter = await new Promise<string>((resolve) => {
+      rlSender.question('Filtrar por remetente (deixe em branco para não filtrar): ', (answer) => {
+        rlSender.close();
+        resolve(answer.trim());
+      });
+    });
+    
+    // Perguntar quantos emails quer ver
+    const rlLimit = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const limitStr = await new Promise<string>((resolve) => {
+      rlLimit.question('Quantidade de emails a mostrar (padrão: 10): ', (answer) => {
+        rlLimit.close();
+        resolve(answer.trim());
+      });
+    });
+    
+    const limit = limitStr ? parseInt(limitStr, 10) : 10;
+    
+    // Preparar filtro
+    const filterOptions: EmailFilterOptions = {
+      unreadOnly: unreadOnly,
+      limit: limit > 0 ? limit : 10
+    };
+    
+    // Adicionar filtro de remetente se for fornecido
+    if (senderFilter) {
+      filterOptions.fromAddresses = [senderFilter];
+    }
+    
+    console.log('\n🔍 Buscando emails com os filtros especificados...');
+    
+    // Buscar emails com os filtros
+    const emails = await listEmailsUseCase.execute(filterOptions);
+    
+    if (emails.length === 0) {
+      console.log('📭 Nenhum email encontrado com os filtros especificados.');
+      return;
+    }
+    
+    // Mostrar os emails
+    console.log(`📬 Encontrados ${emails.length} emails.`);
+    
+    // Select an email
+    const selectedEmail = await emailCLI.selectEmail(emails);
+    
+    if (selectedEmail) {
+      console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+      
+      // Buscar conteúdo completo do email
+      const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
+      
+      // Exibir o conteúdo do email
+      emailCLI.displayEmail(fullEmail);
+    }
+  } catch (error) {
+    console.error('\n❌ Erro ao filtrar emails');
+    
+    if (error instanceof Error) {
+      console.error(`   Mensagem: ${error.message}`);
+    }
+  }
+}
+
 async function main() {
   try {
     // Get dependencies
@@ -106,6 +202,7 @@ async function main() {
     const listUnreadEmailsUseCase = container.resolve(ListUnreadEmailsUseCase);
     const getEmailContentUseCase = container.resolve(GetEmailContentUseCase);
     const markEmailAsReadUseCase = container.resolve(MarkEmailAsReadUseCase);
+    const listEmailsUseCase = container.resolve(ListEmailsUseCase);
     const emailCLI = new EmailCLI();
     const authCLI = new AuthCLI();
     
@@ -179,6 +276,14 @@ async function main() {
             listUnreadEmailsUseCase,
             getEmailContentUseCase,
             markEmailAsReadUseCase
+          );
+          break;
+        
+        case 'filter_emails':
+          await handleFilteredEmails(
+            emailCLI,
+            listEmailsUseCase,
+            getEmailContentUseCase
           );
           break;
           

@@ -1,6 +1,6 @@
 import { ImapFlow } from 'imapflow';
 import { injectable } from 'tsyringe';
-import { Email, IEmailProvider } from '@/domain/interfaces/IEmailProvider';
+import { Email, IEmailProvider, EmailFilterOptions } from '@/domain/interfaces/IEmailProvider';
 import { simpleParser } from 'mailparser';
 
 interface ImapConfig {
@@ -232,5 +232,104 @@ export class ImapEmailProvider implements IEmailProvider {
       console.error('❌ Erro ao marcar email como lido:', error);
       throw error;
     }
+  }
+
+  async listEmails(filterOptions?: EmailFilterOptions): Promise<Email[]> {
+    const emails: Email[] = [];
+    const DEFAULT_LIMIT = 10;
+    
+    // Set default filter options
+    const options: EmailFilterOptions = {
+      unreadOnly: false,
+      fromAddresses: [],
+      limit: DEFAULT_LIMIT,
+      ...filterOptions
+    };
+
+    try {
+      // Make sure we're connected
+      if (!this.client.authenticated) {
+        await this.connect();
+      }
+
+      console.log(`🔍 Buscando emails na caixa de entrada${options.unreadOnly ? ' (apenas não lidos)' : ''}...`);
+      
+      // Select the inbox without marking messages as seen
+      const lock = await this.client.getMailboxLock('INBOX');
+      
+      try {
+        // Prepare search criteria
+        const searchCriteria: any = {};
+        
+        // Filter for unread emails if requested
+        if (options.unreadOnly) {
+          searchCriteria.seen = false;
+        }
+        
+        // Search for messages matching criteria
+        const messages = await this.client.search(searchCriteria, { uid: true });
+        
+        if (messages.length === 0) {
+          console.log('📭 Nenhum email encontrado com os filtros especificados.');
+          return [];
+        } 
+        
+        const totalMessages = messages.length;
+        // Determine how many messages to process (default or user-specified limit)
+        const messagesToProcess = messages.slice(-Math.min(totalMessages, options.limit || DEFAULT_LIMIT));
+        
+        if (totalMessages > (options.limit || DEFAULT_LIMIT)) {
+          console.log(`📬 Encontrados ${totalMessages} emails. Mostrando os ${options.limit || DEFAULT_LIMIT} mais recentes.`);
+        } else {
+          console.log(`📬 Encontrados ${totalMessages} emails.`);
+        }
+        
+        console.log('⏳ Carregando detalhes dos emails...');
+        
+        // Fetch headers for each message without marking as read
+        for (const message of messagesToProcess) {
+          const messageId = message.toString();
+          const fetch = await this.client.fetchOne(messageId, {
+            uid: true,
+            envelope: true,
+            internalDate: true,
+            flags: true,
+          }, { uid: true });
+
+          if (fetch && fetch.envelope) {
+            const fromAddress = fetch.envelope.from?.[0]?.address || '';
+            // Verifica se flags é um array antes de usar includes
+            const isSeen = Array.isArray(fetch.flags) ? fetch.flags.includes('\\Seen') : false;
+            
+            // Skip if we're filtering by sender and this email doesn't match
+            if (options.fromAddresses && 
+                options.fromAddresses.length > 0 && 
+                !options.fromAddresses.some(addr => fromAddress.toLowerCase().includes(addr.toLowerCase()))) {
+              continue;
+            }
+            
+            emails.push({
+              id: messageId,
+              messageId: fetch.envelope.messageId,
+              subject: fetch.envelope.subject || '(Sem assunto)',
+              from: fromAddress || '(Remetente desconhecido)',
+              date: fetch.internalDate || new Date(),
+              seen: isSeen
+            });
+          }
+        }
+        
+        // Ordena por data, do mais recente para o mais antigo
+        emails.sort((a, b) => b.date.getTime() - a.date.getTime());
+      } finally {
+        // Always release the lock
+        lock.release();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao listar emails:', error);
+      throw error;
+    }
+
+    return emails;
   }
 }

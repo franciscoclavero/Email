@@ -67,6 +67,6 @@ describe('ListUnreadEmailsUseCase', () => {
   it('should throw an error when email provider fails', async () => {
     jest.spyOn(mockEmailProvider, 'listUnreadEmails').mockRejectedValue(new Error('Connection error'));
     
-    await expect(listUnreadEmailsUseCase.execute()).rejects.toThrow('Failed to list unread emails');
+    await expect(listUnreadEmailsUseCase.execute()).rejects.toThrow('Falha ao listar emails não lidos');
   });
 });

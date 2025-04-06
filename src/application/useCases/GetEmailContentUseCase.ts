@@ -12,8 +12,8 @@ export class GetEmailContentUseCase {
     try {
       return await this.emailProvider.getEmailContent(id);
     } catch (error) {
-      console.error('Error getting email content:', error);
-      throw new Error('Failed to get email content');
+      console.error('❌ Erro ao obter conteúdo do email:', error);
+      throw new Error('Falha ao obter conteúdo do email');
     }
   }
 }

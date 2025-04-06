@@ -68,6 +68,6 @@ describe('GetEmailContentUseCase', () => {
   it('should throw an error when email provider fails', async () => {
     jest.spyOn(mockEmailProvider, 'getEmailContent').mockRejectedValue(new Error('Email not found'));
     
-    await expect(getEmailContentUseCase.execute('999')).rejects.toThrow('Failed to get email content');
+    await expect(getEmailContentUseCase.execute('999')).rejects.toThrow('Falha ao obter conteúdo do email');
   });
 });

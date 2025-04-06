@@ -12,8 +12,8 @@ export class ListUnreadEmailsUseCase {
     try {
       return await this.emailProvider.listUnreadEmails();
     } catch (error) {
-      console.error('Error listing unread emails:', error);
-      throw new Error('Failed to list unread emails');
+      console.error('❌ Erro ao listar emails não lidos:', error);
+      throw new Error('Falha ao listar emails não lidos');
     }
   }
 }

@@ -72,6 +72,63 @@ describe('AuthCLI', () => {
       }));
     });
     
+    it('should set saved form values as initial values in prompts', async () => {
+      // Arrange - No saved credentials for full authentication flow
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(false);
+      
+      // Set some values in emailConfig to test initial values
+      Object.assign(emailConfig, {
+        host: 'imap.example.com', 
+        port: 587,
+        user: 'user@example.com',
+        pass: ''  // Não usamos para senha
+      });
+      
+      // Mock prompt responses for each field
+      (prompt as jest.Mock)
+        .mockResolvedValueOnce({ host: 'new.example.com' })
+        .mockResolvedValueOnce({ port: '465' })
+        .mockResolvedValueOnce({ user: 'new@example.com' })
+        .mockResolvedValueOnce({ password: 'newpassword' });
+      
+      // Act
+      const result = await authCLI.collectCredentials();
+      
+      // Assert
+      // Verifica se cada prompt foi chamado com o valor inicial correto
+      expect(prompt).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        type: 'input',
+        name: 'host',
+        initial: 'imap.example.com'
+      }));
+      
+      expect(prompt).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        type: 'input',
+        name: 'port',
+        initial: '587'
+      }));
+      
+      expect(prompt).toHaveBeenNthCalledWith(3, expect.objectContaining({
+        type: 'input',
+        name: 'user',
+        initial: 'user@example.com'
+      }));
+      
+      // Senha não deve ter valor inicial por segurança
+      expect(prompt).toHaveBeenNthCalledWith(4, expect.objectContaining({
+        type: 'password',
+        name: 'password'
+      }));
+      
+      // Resultado final deve ser os novos valores
+      expect(result).toEqual({
+        host: 'new.example.com',
+        port: 465,
+        user: 'new@example.com',
+        password: 'newpassword'
+      });
+    });
+    
     it('should prompt for credentials when user declines to use saved credentials', async () => {
       // Arrange - Mock that we have saved credentials
       (validateEmailConfig as jest.Mock).mockReturnValueOnce(true);
@@ -191,6 +248,73 @@ describe('AuthCLI', () => {
       
       // Assert
       expect(portPrompt).toHaveBeenCalled();
+    });
+    
+    it('should handle the case where emailConfig already has values but without saved credentials', async () => {
+      // Mock that we don't have valid saved credentials
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(false);
+      
+      // But we have some partial data in emailConfig
+      Object.assign(emailConfig, {
+        host: 'imap.previous.com',
+        port: 587,
+        user: 'previous@test.com',
+        pass: '' // Sem senha, então validateEmailConfig retorna false
+      });
+      
+      // Mock the prompt responses
+      (prompt as jest.Mock).mockResolvedValueOnce({ host: 'imap.test.com' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ port: '993' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ user: 'test@test.com' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ password: 'password123' });
+      
+      // Act
+      const result = await authCLI.collectCredentials();
+      
+      // Verify we got the expected result
+      expect(result).toEqual({
+        host: 'imap.test.com',
+        port: 993,
+        user: 'test@test.com',
+        password: 'password123'
+      });
+      
+      // Verify the prompt was configured with the right initial values
+      expect(prompt).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        initial: 'imap.previous.com'
+      }));
+    });
+    
+    it('should handle empty emailConfig values with proper defaults', async () => {
+      // No saved credentials
+      (validateEmailConfig as jest.Mock).mockReturnValueOnce(false);
+      
+      // Empty emailConfig
+      Object.assign(emailConfig, {
+        host: '',
+        port: 0,
+        user: '',
+        pass: ''
+      });
+      
+      // Mock the prompt responses
+      (prompt as jest.Mock).mockResolvedValueOnce({ host: 'imap.test.com' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ port: '993' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ user: 'test@test.com' });
+      (prompt as jest.Mock).mockResolvedValueOnce({ password: 'password123' });
+      
+      // Act
+      await authCLI.collectCredentials();
+      
+      // Verify Gmail is the default when host is empty
+      expect(prompt).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        initial: 'imap.gmail.com'
+      }));
+      
+      // Verify 993 is the default port
+      expect(prompt).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        initial: '993'
+      }));
     });
 
     it('should validate email user input correctly', async () => {

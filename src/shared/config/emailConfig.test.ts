@@ -208,6 +208,40 @@ describe('emailConfig', () => {
     expect(fs.existsSync).toHaveBeenCalled();
   });
   
+  it('should return current directory when package.json is not found', () => {
+    // Vamos testar esta funcionalidade implementando diretamente para evitar problemas com os mocks
+
+    jest.resetModules();
+    jest.clearAllMocks();
+    
+    // Reimport fs, path and require emailConfig
+    const mockFs = require('fs');
+    const mockPath = require('path');
+    
+    // Configura os mocks aqui, antes de importar o módulo
+    mockFs.existsSync = jest.fn().mockReturnValue(false);
+    mockPath.resolve = jest.fn().mockImplementation((dir, up) => {
+      // Simula chegar à raiz do sistema de arquivos
+      if (dir === '/') return '/';
+      return '/';  // Retorna sempre a raiz para simular chegada ao topo
+    });
+    mockPath.join = jest.fn().mockImplementation((...args) => args.join('/'));
+    
+    // Agora importa o módulo com os mocks já configurados
+    const emailConfigModule = require('./emailConfig');
+    
+    // Testa a função
+    const result = emailConfigModule.findProjectRoot();
+    
+    // Verifica se a função utilizou os mocks como esperado
+    expect(mockFs.existsSync).toHaveBeenCalled();
+    expect(mockPath.resolve).toHaveBeenCalled();
+    expect(mockPath.join).toHaveBeenCalled();
+    
+    // Deve retornar o diretório atual como fallback
+    expect(result).toBe(process.cwd());
+  });
+  
   it('should handle errors when saving config', async () => {
     const { saveEmailConfig } = require('./emailConfig');
     const { writeFile } = require('fs/promises');

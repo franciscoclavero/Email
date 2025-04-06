@@ -453,6 +453,30 @@ describe('ImapEmailProvider', () => {
       consoleLogSpy.mockRestore();
     });
     
+    it('should handle connection authentication errors with specific auth message', async () => {
+      // Setup
+      const authError = new Error('auth failed');
+      const mockImapFlow = {
+        connect: jest.fn().mockRejectedValue(authError)
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      provider = new ImapEmailProvider();
+      await provider.configure('imap.test.com', 993, 'test@test.com', 'password');
+
+      // Act
+      try {
+        await provider.connect();
+      } catch (error) {
+        // We expect it to throw
+      }
+
+      // Assert
+      expect(console.error).toHaveBeenCalledWith('❌ Falha ao conectar com o servidor de email!');
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Isso parece um problema de autenticação'));
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('senha de aplicativo'));
+    });
+    
     it('should handle email without text or HTML content', async () => {
       // Setup - Mock console.log to prevent debug messages
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});

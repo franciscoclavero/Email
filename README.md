@@ -5,9 +5,13 @@ Uma aplicação em Node.js com TypeScript que permite ler e-mails da caixa de en
 ## Funcionalidades
 
 - Conecta-se a um servidor de e-mail via IMAP
-- Lista e-mails não lidos da caixa de entrada
+- Lista os 10 e-mails não lidos mais recentes da caixa de entrada
 - Permite selecionar e-mails usando setas do teclado no terminal
-- Exibe o conteúdo do e-mail selecionado
+- Exibe o conteúdo completo do e-mail selecionado, formatado para fácil leitura
+- Suporta emails em HTML e texto simples
+- Converte elementos HTML como links, listas e tabelas para visualização no terminal
+- Permite voltar à lista de emails após visualizar um e-mail
+- Interface interativa para navegação entre emails
 - Não marca e-mails como lidos durante o processo
 
 ## Requisitos
@@ -47,9 +51,10 @@ npm start
 
 Isso irá:
 1. Conectar-se ao servidor de e-mail configurado
-2. Listar todos os e-mails não lidos
+2. Listar os 10 e-mails não lidos mais recentes
 3. Permitir selecionar um e-mail usando as setas do teclado
-4. Exibir o conteúdo do e-mail selecionado
+4. Obter e exibir o conteúdo completo do e-mail selecionado, formatado para fácil leitura no terminal
+5. Permitir voltar à lista de e-mails ou sair da aplicação após visualizar um e-mail
 
 ## Desenvolvimento
 

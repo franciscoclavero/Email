@@ -3,8 +3,11 @@ import './shared/container';
 import { container } from 'tsyringe';
 import { validateEmailConfig } from './shared/config/emailConfig';
 import { ListUnreadEmailsUseCase } from './application/useCases/ListUnreadEmailsUseCase';
+import { GetEmailContentUseCase } from './application/useCases/GetEmailContentUseCase';
 import { EmailCLI } from './presentation/cli/EmailCLI';
 import { IEmailProvider } from './domain/interfaces/IEmailProvider';
+import { createInterface } from 'readline';
+import fs from 'fs';
 
 async function main() {
   try {
@@ -14,24 +17,58 @@ async function main() {
     // Get dependencies
     const emailProvider = container.resolve<IEmailProvider>('EmailProvider');
     const listUnreadEmailsUseCase = container.resolve(ListUnreadEmailsUseCase);
+    const getEmailContentUseCase = container.resolve(GetEmailContentUseCase);
     const emailCLI = new EmailCLI();
 
     // Connect to email server
     await emailProvider.connect();
 
-    // List unread emails
-    const emails = await listUnreadEmailsUseCase.execute();
-
-    // Select an email (apenas seleção, sem exibir conteúdo)
-    const selectedEmail = await emailCLI.selectEmail(emails);
-    
-    if (selectedEmail) {
-      console.log(`\n📧 Email selecionado: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+    try {
+      let continueRunning = true;
+      
+      while (continueRunning) {
+        // List unread emails
+        const emails = await listUnreadEmailsUseCase.execute();
+        
+        // Select an email
+        const selectedEmail = await emailCLI.selectEmail(emails);
+        
+        if (selectedEmail) {
+          console.log(`\n📧 Carregando conteúdo do email: "${selectedEmail.subject}" de ${selectedEmail.from}`);
+          
+          // Buscar conteúdo completo do email
+          const fullEmail = await getEmailContentUseCase.execute(selectedEmail.id);
+          fs.writeFileSync('email.txt', JSON.stringify(fullEmail));
+          
+          // Exibir o conteúdo do email
+          emailCLI.displayEmail(fullEmail);
+          
+          // Perguntar se o usuário quer voltar à lista ou sair
+          const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+          
+          const answer = await new Promise<string>((resolve) => {
+            rl.question('\n📋 Pressione ENTER para voltar à lista ou "Q" para sair: ', (answer) => {
+              rl.close();
+              resolve(answer.trim().toLowerCase());
+            });
+          });
+          
+          if (answer === 'q') {
+            continueRunning = false;
+          }
+        } else {
+          // Se não selecionou nenhum email, sair do loop
+          continueRunning = false;
+        }
+      }
+    } finally {
+      // Disconnect - garantimos que o disconnect sempre é chamado
+      console.log('\n🔄 Finalizando conexão...');
+      await emailProvider.disconnect();
     }
-
-    // Disconnect
-    console.log('\n🔄 Finalizando conexão...');
-    await emailProvider.disconnect();
   } catch (error) {
     console.error('\n❌ Erro na aplicação');
     

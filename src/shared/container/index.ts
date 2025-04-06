@@ -8,3 +8,6 @@ container.registerSingleton<IEmailProvider>(
   'EmailProvider',
   ImapEmailProvider
 );
+
+// Exporta o container para poder ser acessado em outros módulos
+export { container };

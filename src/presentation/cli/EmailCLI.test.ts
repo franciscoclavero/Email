@@ -204,5 +204,73 @@ describe('EmailCLI', () => {
       expect(textContent).toContain('Multiple paragraphs');
       expect(textContent).toContain('Second paragraph');
     });
+    
+    it('should handle HTML links, entities and special elements', () => {
+      // Setup
+      const email: Email = {
+        id: '1',
+        messageId: '<test123@example.com>',
+        subject: 'Test with HTML Entities',
+        from: 'sender@example.com',
+        date: new Date('2023-01-01T10:00:00Z'),
+        body: {
+          html: '<div><h2>Title</h2><p>This is a <a href="https://example.com">link</a> with &quot;entities&quot; &amp; special chars.</p><ul><li>Item 1</li><li>Item 2</li></ul><table><tr><td>Cell 1</td><td>Cell 2</td></tr></table></div>'
+        }
+      };
+
+      // Act
+      cli.displayEmail(email);
+
+      // Assert
+      // Check if Message ID is displayed
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('ID: <test123@example.com>'));
+      
+      // Find the content in the log calls
+      const calls = mockConsoleLog.mock.calls.flat();
+      const textContentArray = calls.filter((call: string) => 
+        typeof call === 'string' && 
+        (call.includes('Title') || 
+         call.includes('link') ||
+         call.includes('Item 1') ||
+         call.includes('Cell 1'))
+      );
+      
+      // Expect formatted elements
+      expect(textContentArray.some(text => text.includes('Title'))).toBeTruthy();
+      expect(textContentArray.some(text => text.includes('link (https://example.com)'))).toBeTruthy();
+      expect(textContentArray.some(text => text.includes('"entities" & special chars'))).toBeTruthy();
+      expect(textContentArray.some(text => text.includes('• Item 1'))).toBeTruthy();
+      expect(textContentArray.some(text => text.includes('• Item 2'))).toBeTruthy();
+      expect(textContentArray.some(text => text.includes('Cell 1'))).toBeTruthy();
+    });
+    
+    it('should format plain text correctly', () => {
+      // Setup
+      const email: Email = {
+        id: '1',
+        subject: 'Plain text email',
+        from: 'sender@example.com',
+        date: new Date('2023-01-01T10:00:00Z'),
+        body: {
+          text: 'Line 1\r\nLine 2\r\n\r\n\r\n\r\nMultiple blank lines above\r\n    Indented line    '
+        }
+      };
+
+      // Act
+      cli.displayEmail(email);
+
+      // Assert
+      // Find the content in the log calls
+      const calls = mockConsoleLog.mock.calls.flat();
+      const textContent = calls.find((call: string) => 
+        typeof call === 'string' && call.includes('Line 1')
+      );
+      
+      expect(textContent).toBeDefined();
+      expect(textContent).toContain('Line 1');
+      expect(textContent).toContain('Line 2');
+      expect(textContent).toContain('Multiple blank lines above');
+      expect(textContent).toContain('Indented line');
+    });
   });
 });

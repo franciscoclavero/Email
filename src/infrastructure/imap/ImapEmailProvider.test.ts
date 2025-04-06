@@ -2,8 +2,9 @@ import 'reflect-metadata';
 import { ImapEmailProvider } from './ImapEmailProvider';
 import { ImapFlow } from 'imapflow';
 import { Email } from '@/domain/interfaces/IEmailProvider';
+import { simpleParser } from 'mailparser';
 
-// Mock ImapFlow class
+// Mock ImapFlow class and mailparser
 jest.mock('imapflow', () => {
   return {
     ImapFlow: jest.fn().mockImplementation(() => ({
@@ -15,14 +16,10 @@ jest.mock('imapflow', () => {
       })),
       search: jest.fn().mockResolvedValue(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']),
       fetchOne: jest.fn().mockImplementation((id, fields) => {
-        // Different responses based on id and fields
-        if (fields.bodyPart === 'TEXT') {
+        // Return source for raw email parsing
+        if (fields.source) {
           return Promise.resolve({
-            bodyPart: Buffer.from('Text content')
-          });
-        } else if (fields.bodyPart === 'HTML') {
-          return Promise.resolve({
-            bodyPart: Buffer.from('<p>HTML content</p>')
+            source: Buffer.from(`From: "Sender" <sender@example.com>\r\nTo: "Recipient" <recipient@example.com>\r\nSubject: Test Subject ${id}\r\nDate: ${new Date().toUTCString()}\r\nMessage-ID: <msg-${id}@example.com>\r\nContent-Type: multipart/alternative; boundary="boundary"\r\n\r\n--boundary\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nText content\r\n\r\n--boundary\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>HTML content</p>\r\n\r\n--boundary--`)
           });
         } else {
           return Promise.resolve({
@@ -38,6 +35,24 @@ jest.mock('imapflow', () => {
         }
       })
     }))
+  };
+});
+
+// Mock mailparser
+jest.mock('mailparser', () => {
+  return {
+    simpleParser: jest.fn().mockImplementation((source) => {
+      // Return parsed email data
+      return Promise.resolve({
+        messageId: '<msg-1@example.com>',
+        subject: 'Test Subject 1',
+        from: { text: 'sender@example.com' },
+        to: { text: 'recipient@example.com' },
+        date: new Date(),
+        text: 'Text content',
+        html: '<p>HTML content</p>'
+      });
+    })
   };
 });
 
@@ -102,6 +117,7 @@ describe('ImapEmailProvider', () => {
 
       // Assert
       expect(console.error).toHaveBeenCalledWith('❌ Falha ao conectar com o servidor de email!');
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Isso parece um problema de autenticação'));
     });
     
     it('should handle network connection errors', async () => {
@@ -309,17 +325,64 @@ describe('ImapEmailProvider', () => {
   });
 
   describe('getEmailContent', () => {
-    it('should get email content successfully', async () => {
+    it('should get email content successfully using mailparser', async () => {
+      // Setup - Mock console.log to prevent debug messages
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      
+      // Override just for this test
+      (simpleParser as jest.Mock).mockResolvedValueOnce({
+        messageId: '<msg-1@example.com>',
+        subject: 'Test Subject 1',
+        from: { text: 'sender@example.com' },
+        to: { text: 'recipient@example.com' },
+        date: new Date(),
+        text: 'Text content',
+        html: '<p>HTML content</p>'
+      });
+      
       // Act
       const email = await provider.getEmailContent('1');
 
       // Assert
       const mockClient = (provider as any).client;
-      expect(mockClient.fetchOne).toHaveBeenCalled();
+      expect(mockClient.fetchOne).toHaveBeenCalledWith('1', { source: true }, { uid: true });
+      expect(simpleParser).toHaveBeenCalled();
       expect(email.id).toBe('1');
       expect(email.subject).toBe('Test Subject 1');
       expect(email.body?.text).toBe('Text content');
       expect(email.body?.html).toBe('<p>HTML content</p>');
+      expect(consoleLogSpy).toHaveBeenCalledWith('📨 Contém texto: Sim');
+      expect(consoleLogSpy).toHaveBeenCalledWith('📨 Contém HTML: Sim');
+      
+      // Cleanup
+      consoleLogSpy.mockRestore();
+    });
+    
+    it('should handle email without text or HTML content', async () => {
+      // Setup - Mock console.log to prevent debug messages
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      
+      // Override just for this test
+      (simpleParser as jest.Mock).mockResolvedValueOnce({
+        messageId: '<msg-1@example.com>',
+        subject: 'Empty Email',
+        from: { text: 'sender@example.com' },
+        to: { text: 'recipient@example.com' },
+        date: new Date(),
+        // No text or HTML content
+      });
+      
+      // Act
+      const email = await provider.getEmailContent('1');
+
+      // Assert
+      expect(email.body?.text).toBe('');
+      expect(email.body?.html).toBe('');
+      expect(consoleLogSpy).toHaveBeenCalledWith('📨 Contém texto: Não');
+      expect(consoleLogSpy).toHaveBeenCalledWith('📨 Contém HTML: Não');
+      
+      // Cleanup
+      consoleLogSpy.mockRestore();
     });
 
     it('should connect if not authenticated', async () => {
@@ -334,7 +397,7 @@ describe('ImapEmailProvider', () => {
       expect(connectSpy).toHaveBeenCalled();
     });
     
-    it('should handle fetchOne returning null for envelope', async () => {
+    it('should handle missing source in fetchOne response', async () => {
       // Setup
       const mockImapFlow = {
         authenticated: true,
@@ -343,57 +406,41 @@ describe('ImapEmailProvider', () => {
         })),
         fetchOne: jest.fn().mockResolvedValue({
           uid: '1',
-          envelope: null // Null envelope
+          // No source property
         })
       };
       (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
       
       provider = new ImapEmailProvider();
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      // Act
-      const email = await provider.getEmailContent('1');
-
-      // Assert
-      expect(email.id).toBe('1');
-      expect(email.subject).toBe('');
-      expect(email.from).toBe('');
-      expect(email.body).toBeDefined();
+      // Act & Assert
+      await expect(provider.getEmailContent('1')).rejects.toThrow('Email source not available');
+      expect(consoleLogSpy).toHaveBeenCalledWith('⚠️ Não foi possível obter o email completo.');
+      
+      // Cleanup
+      consoleLogSpy.mockRestore();
     });
     
-    it('should handle missing bodyPart', async () => {
-      // Setup - We'll simulate no body parts returned
+    it('should handle null response from fetchOne', async () => {
+      // Setup
       const mockImapFlow = {
         authenticated: true,
         getMailboxLock: jest.fn().mockImplementation(() => ({
           release: jest.fn()
         })),
-        fetchOne: jest.fn().mockImplementation((id, fields) => {
-          if (fields.envelope) {
-            return Promise.resolve({
-              uid: id,
-              envelope: {
-                messageId: `<msg-${id}@example.com>`,
-                subject: `Test Subject ${id}`,
-                from: [{ address: 'sender@example.com', name: 'Sender' }],
-              },
-              internalDate: new Date()
-            });
-          } else {
-            // Return no bodyPart for text/html requests
-            return Promise.resolve({ uid: id });
-          }
-        })
+        fetchOne: jest.fn().mockResolvedValue(null)
       };
       (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
       
       provider = new ImapEmailProvider();
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      // Act
-      const email = await provider.getEmailContent('1');
-
-      // Assert
-      expect(email.body?.text).toBe('');
-      expect(email.body?.html).toBe('');
+      // Act & Assert
+      await expect(provider.getEmailContent('1')).rejects.toThrow('Email source not available');
+      
+      // Cleanup
+      consoleLogSpy.mockRestore();
     });
 
     it('should handle errors during fetching content', async () => {
@@ -413,6 +460,28 @@ describe('ImapEmailProvider', () => {
       // Act & Assert
       await expect(provider.getEmailContent('1')).rejects.toThrow('Fetch failed');
       expect(console.error).toHaveBeenCalledWith('❌ Erro ao obter conteúdo do email:', error);
+    });
+
+    it('should handle errors in mailparser', async () => {
+      // Setup
+      const mockImapFlow = {
+        authenticated: true,
+        getMailboxLock: jest.fn().mockImplementation(() => ({
+          release: jest.fn()
+        })),
+        fetchOne: jest.fn().mockResolvedValue({
+          source: Buffer.from('Invalid email content')
+        })
+      };
+      (ImapFlow as jest.Mock).mockImplementationOnce(() => mockImapFlow);
+      
+      const parserError = new Error('Parsing failed');
+      (simpleParser as jest.Mock).mockRejectedValueOnce(parserError);
+      
+      provider = new ImapEmailProvider();
+
+      // Act & Assert
+      await expect(provider.getEmailContent('1')).rejects.toThrow('Parsing failed');
     });
 
     it('should always release the lock even on error', async () => {

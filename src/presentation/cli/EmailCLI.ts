@@ -33,25 +33,59 @@ export class EmailCLI {
 
   displayEmail(email: Email): void {
     console.clear();
-    console.log('='.repeat(80));
+    
+    // Cabeçalho do email
+    console.log('\n' + '📧'.padEnd(80, '='));
     console.log(`De: ${email.from}`);
     console.log(`Assunto: ${email.subject}`);
     console.log(`Data: ${email.date.toLocaleString()}`);
+    if (email.messageId) {
+      console.log(`ID: ${email.messageId}`);
+    }
     console.log('='.repeat(80));
+    
+    // Espaço antes do conteúdo
     console.log('\n');
     
+    // Conteúdo do email
     if (email.body?.text) {
-      console.log(email.body.text);
+      // Quebrar o texto em linhas e adicionar espaço para leitura mais fácil
+      const formattedText = email.body.text
+        .replace(/\r\n/g, '\n')  // Normalizar quebras de linha
+        .replace(/\n{3,}/g, '\n\n')  // Substituir múltiplas linhas em branco por apenas duas
+        .split('\n')
+        .map(line => line.trim())
+        .join('\n');
+      
+      console.log(formattedText);
     } else if (email.body?.html) {
-      // Very simple HTML to text conversion
+      // Melhorada a conversão de HTML para texto
       const text = email.body.html
         .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
         .replace(/<\/p>/gi, '\n\n')
-        .replace(/<[^>]*>/g, '');
+        .replace(/<\/tr>/gi, '\n')
+        .replace(/<\/h[1-6]>/gi, '\n\n')
+        .replace(/<li>/gi, '• ')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<\/td>/gi, '\t')
+        .replace(/<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/gi, '$2 ($1)')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\n{3,}/g, '\n\n')  // Substituir múltiplas linhas em branco por apenas duas
+        .trim();
       
       console.log(text);
     } else {
       console.log('📄 Nenhum conteúdo disponível para este email.');
     }
+    
+    // Rodapé
+    console.log('\n' + '='.repeat(80));
   }
 }

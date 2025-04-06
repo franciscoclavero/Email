@@ -2,6 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { injectable } from 'tsyringe';
 import { Email, IEmailProvider } from '@/domain/interfaces/IEmailProvider';
 import { emailConfig } from '@/shared/config/emailConfig';
+import { simpleParser } from 'mailparser';
 
 @injectable()
 export class ImapEmailProvider implements IEmailProvider {
@@ -133,65 +134,45 @@ export class ImapEmailProvider implements IEmailProvider {
       console.log('📨 Carregando conteúdo do email...');
       
       const lock = await this.client.getMailboxLock('INBOX');
-      let email: Email = {
-        id,
-        subject: '',
-        from: '',
-        date: new Date(),
-        body: {
-          text: '',
-          html: ''
-        }
-      };
-
+      
       try {
-        // Fetch the message by UID without marking as read
-        const fetch = await this.client.fetchOne(id, {
-          uid: true,
-          envelope: true,
-          internalDate: true,
-          source: true,
-          bodyStructure: true
-        }, { uid: true });
-
-        if (fetch && fetch.envelope) {
-          email = {
-            id,
-            messageId: fetch.envelope.messageId,
-            subject: fetch.envelope.subject || '(Sem assunto)',
-            from: fetch.envelope.from?.[0]?.address || '(Remetente desconhecido)',
-            date: fetch.internalDate || new Date(),
-            body: {
-              text: '',
-              html: ''
-            }
-          };
-
-          // Get text and html body parts
-          const textPart = await this.client.fetchOne(id, {
-            uid: true,
-            bodyPart: 'TEXT',
-          }, { uid: true });
-
-          const htmlPart = await this.client.fetchOne(id, {
-            uid: true,
-            bodyPart: 'HTML',
-          }, { uid: true });
-
-          if (textPart && textPart.bodyPart) {
-            email.body!.text = textPart.bodyPart.toString();
-          }
-
-          if (htmlPart && htmlPart.bodyPart) {
-            email.body!.html = htmlPart.bodyPart.toString();
-          }
+        // Fetch the message by UID with source flag to get the raw email
+        console.log('📨 Buscando email completo com source...');
+        const message = await this.client.fetchOne(id, { source: true }, { uid: true });
+        
+        if (!message?.source) {
+          console.log('⚠️ Não foi possível obter o email completo.');
+          throw new Error('Email source not available');
         }
+        
+        console.log('📨 Analisando conteúdo do email com mailparser...');
+        // Parse the email using mailparser
+        const parsed = await simpleParser(message.source);
+        
+        // Create email object from parsed content
+        const email: Email = {
+          id,
+          messageId: parsed.messageId || undefined,
+          subject: parsed.subject || '(Sem assunto)',
+          from: parsed.from?.text || '(Remetente desconhecido)',
+          date: parsed.date || new Date(),
+          body: {
+            text: parsed.text || '',
+            html: parsed.html || ''
+          }
+        };
+        
+        // Log para debug
+        console.log(`📨 Email carregado: ${email.subject}`);
+        console.log(`📨 Contém texto: ${parsed.text ? 'Sim' : 'Não'}`);
+        console.log(`📨 Contém HTML: ${parsed.html ? 'Sim' : 'Não'}`);
+        
+        return email;
+        
       } finally {
         // Always release the lock
         lock.release();
       }
-
-      return email;
     } catch (error) {
       console.error('❌ Erro ao obter conteúdo do email:', error);
       throw error;

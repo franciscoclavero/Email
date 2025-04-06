@@ -1,91 +1,42 @@
-Perfeito! Aqui está a **versão atualizada das instruções do projeto** com a **Etapa 1 adicionada** ao final:
+Sim! Com simpleParser, fica muito mais fácil. Você pega o e-mail completo com source: true e o simpleParser extrai tudo pra você: texto, HTML, anexos, remetente, assunto, etc.
 
----
+✅ Exemplo simples com simpleParser:
+ts
+Copy
+Edit
+import { simpleParser } from 'mailparser';
 
-## ✅ OBJETIVO DO PROJETO
+const message = await this.client.fetchOne(id, { source: true }, { uid: true });
 
-Criar uma aplicação **Node.js com TypeScript** que:
+if (message?.source) {
+  const parsed = await simpleParser(message.source);
 
-1. Lê e-mails da caixa de entrada (IMAP) **sem marcar como lidos**  
-2. Lista os e-mails e permite **selecionar com setas no terminal**  
-3. Exibe o conteúdo do e-mail selecionado  
-4. Segue **princípios SOLID** com arquitetura clara e simples  
-5. Possui **estrutura para testes unitários com Jest**
+  const email: Email = {
+    id,
+    subject: parsed.subject || '(Sem assunto)',
+    from: parsed.from?.text || '(Remetente desconhecido)',
+    date: parsed.date || new Date(),
+    body: {
+      text: parsed.text || '',
+      html: parsed.html || ''
+    }
+  };
 
----
+  return email;
+}
+📦 Instalação:
+bash
+Copy
+Edit
+npm install mailparser
+Com isso, você pode remover todos os fetchOne com bodyPart — o simpleParser faz tudo por trás dos panos.
 
-## 📦 BIBLIOTECAS UTILIZADAS
+Quer que eu envie a versão atualizada da sua função getEmailContent com isso aplicado?
 
-| Finalidade                      | Biblioteca                         |
-|----------------------------------|------------------------------------|
-| Leitura de e-mails              | `imapflow`                         |
-| Interface terminal              | `enquirer`                         |
-| Tipagem                         | `typescript`                       |
-| Variáveis de ambiente           | `dotenv`                           |
-| Injeção de dependência          | `tsyringe`, `reflect-metadata`     |
-| Testes unitários                | `jest`, `ts-jest`, `@types/jest`   |
 
----
 
-## 🧱 ESTRUTURA DO PROJETO (ARQUITETURA SOLID)
 
-```
-src/
-├── application/
-│   └── useCases/               → Casos de uso (regras de negócio)
-├── domain/
-│   └── interfaces/             → Contratos (ex: IEmailProvider)
-├── infrastructure/
-│   └── imap/                   → Implementação concreta (imapflow)
-├── presentation/
-│   └── cli/                    → Interface CLI (enquirer)
-├── shared/
-│   ├── config/                 → Configuração geral (ex: dotenv)
-│   └── container/              → Injeção de dependência (tsyringe)
-├── index.ts                    → Ponto de entrada da aplicação
-```
 
----
 
-## 🧪 TESTES UNITÁRIOS
 
-- Usa `jest` com `ts-jest` para rodar testes em TypeScript
-- Testes ficam próximos aos arquivos, com nome `*.test.ts`
 
----
-
-## 🚀 ETAPA 1 — Conectar ao e-mail e listar e-mails não lidos
-
-### Objetivo  
-Conectar à caixa de entrada via IMAP e listar todos os e-mails **não lidos**, sem marcá-los como lidos.
-
-### Requisitos
-
-- Configurar variáveis de ambiente:
-  ```
-  EMAIL_HOST=imap.exemplo.com  
-  EMAIL_PORT=993  
-  EMAIL_USER=seu@email.com  
-  EMAIL_PASS=sua_senha  
-  ```
-
-- Instalar bibliotecas:
-  ```bash
-  npm install imapflow dotenv tsyringe reflect-metadata
-  ```
-
-### Arquivos envolvidos
-
-- `shared/config/emailConfig.ts` → carrega as envs
-- `domain/interfaces/IEmailProvider.ts` → define `listUnreadEmails(): Promise<Email[]>`
-- `infrastructure/imap/ImapEmailProvider.ts` → implementa o método com `imapflow`
-- `application/useCases/ListUnreadEmailsUseCase.ts` → chama o provider
-- `index.ts` → executa a lógica e exibe no terminal
-
-### Testes
-
-- Criar teste unitário para `ListUnreadEmailsUseCase` com mock do `IEmailProvider`
-
----
-
-Quer que eu gere algum desses arquivos agora?
